@@ -20,11 +20,9 @@ When you have a design you like, click the "capture" button.
 
 That will put the code of your "scene" onto your clipboard.
 
-Paste it into this thread to share.
-
-To clear the page, CTRL-R.
-
-
 
 ## Loading
 To load someone else's scene, paste their code into the box and click "load".
+
+## Clearing
+Reload the page (CTRL-R) to clear the scene.
