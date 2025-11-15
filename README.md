@@ -12,7 +12,7 @@ Double-click a block to cycle its color:
 
 Right-click a block to shift it half a cell in any open direction.
 
-Once shifted, the block can only shift in that same direction again.
+Once shifted, the block can only shift in that same direction again, or be dragged somewhere else.
 
 
 ## Capturing
