@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blocks App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="container mx-auto">
+        <div class="flex gap-8">
+            <!-- Grid Area -->
+            <div id="grid" class="grid-container"></div>
+            
+            <!-- Supply Area -->
+            <div class="flex flex-col gap-4">
+                <div id="supply" class="supply-area"></div>
+                <div class="flex gap-2">
+                    <button id="captureBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded flex-1">
+                        Capture
+                    </button>
+                    <button id="loadBtn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded flex-1">
+                        Load
+                    </button>
+                </div>
+                <textarea id="gridData" class="border-2 border-black p-2 font-mono text-sm" rows="10" placeholder="Grid data will appear here..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="contextMenu" class="context-menu hidden">
+        <div class="context-menu-item" data-direction="up">Half Up</div>
+        <div class="context-menu-item" data-direction="down">Half Down</div>
+        <div class="context-menu-item" data-direction="left">Half Left</div>
+        <div class="context-menu-item" data-direction="right">Half Right</div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
