@@ -580,7 +580,7 @@ function captureGridState() {
         }
     });
     
-    const sceneJSON = JSON.stringify(scene, null, 2);
+    const sceneJSON = JSON.stringify(scene);
     
     // Copy to clipboard
     navigator.clipboard.writeText(sceneJSON).then(() => {
