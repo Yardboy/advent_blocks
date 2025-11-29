@@ -1,27 +1,27 @@
 # Agent Guidelines for Blocks Project
 
 ## Project Structure
-- **index.html**: Main HTML with Tailwind CSS CDN
-- **app.js**: Vanilla JavaScript drag-and-drop logic
-- **styles.css**: Custom CSS for grid, blocks, and context menu
+- **index.html**: Main HTML with Tailwind CSS CDN, no build step required
+- **app.js**: Vanilla JavaScript for drag-and-drop logic, state management
+- **styles.css**: Custom CSS for grid borders, blocks, and layout specifics not covered by Tailwind
 
 ## Build/Test Commands
-No build system or automated tests. Test manually by opening `index.html` in browser.
+- **Run**: Open `index.html` in browser (no build system)
+- **Test**: Manual testing only - drag blocks, test capture/load, verify grid alignment
+- **Lint**: No automated linting configured
 
 ## Code Style
-- **Language**: Vanilla JavaScript (ES6+), no frameworks or TypeScript
-- **Styling**: Tailwind CSS (via CDN) for utility classes, custom CSS for components
-- **Naming**: camelCase for JS (variables/functions), kebab-case for CSS classes, SCREAMING_SNAKE_CASE for constants
-- **Constants**: GRID_SIZE=9, BLOCK_SIZE=96, CELL_SIZE=100, COLORS array
-- **DOM**: querySelector/querySelectorAll, dataset attributes for state tracking
-- **Events**: addEventListener for drag/drop, dblclick, contextmenu, click
-- **State**: Map for grid tracking (`gridBlocks`), global vars for drag state
-- **Error Handling**: Validate bounds, check overlap with `wouldOverlapWithBlock()`, prevent context menu on supply blocks
+- **Language**: Vanilla JavaScript ES6+, no frameworks, no TypeScript
+- **Imports**: None - all code in single `app.js` file loaded via `<script>` tag
+- **Styling**: Tailwind CSS utilities via CDN; custom CSS only for grid borders and block sizing
+- **Naming**: camelCase (variables/functions), kebab-case (CSS classes), SCREAMING_SNAKE_CASE (constants)
+- **Types**: No type annotations - use JSDoc comments for complex functions if needed
+- **State Management**: Track grid state as object with row/col keys containing {blockNumber, backgroundColor}
+- **Error Handling**: Wrap DOM operations and drag-and-drop handlers in try-catch blocks
+- **Formatting**: 4-space indentation, semicolons optional, prefer arrow functions and const/let
 
-## Key Features
-- **Blocks**: 96px × 96px (BLOCK_SIZE), centered in 100px cells (CELL_SIZE)
-- **Grid**: 9×9 cells (GRID_SIZE), 2px black borders
-- **Drag-drop**: Snap to grid, collision detection, numbered blocks return to supply, blank blocks disappear when removed
-- **Color cycling**: Double-click cycles green → red → yellow → blue → green
-- **Half-cell shifting**: Right-click shows context menu to shift blocks 50px (half-cell) in available directions
-- **Scene capture/load**: JSON serialization with absolute positioning, clipboard integration
+## Key Implementation Notes
+- Grid cells identified by row/col (0-indexed), NOT absolute pixel positions
+- Numbered blocks (1-24): single instance only, disappear from supply when placed
+- Blank block (0): unlimited instances, stays in supply when placed
+- Blocks align to nearest grid cell on drop; return to supply if dropped outside grid
