@@ -7,7 +7,7 @@
 
 ## Build/Test Commands
 - **Run**: Open `index.html` in browser (no build system)
-- **Test**: Manual testing only - drag blocks, test capture/load, verify grid alignment
+- **Test**: Manual testing only - drag blocks, double-click for colors, test capture/load/reset, verify grid alignment and validation
 - **Lint**: No automated linting configured
 
 ## Code Style
@@ -21,7 +21,10 @@
 - **Formatting**: 4-space indentation, semicolons optional, prefer arrow functions and const/let
 
 ## Key Implementation Notes
+- Grid is 18x18 cells (50px each), blocks are 2x2 cells (100px total)
 - Grid cells identified by row/col (0-indexed), NOT absolute pixel positions
 - Numbered blocks (1-24): single instance only, disappear from supply when placed
 - Blank block (0): unlimited instances, stays in supply when placed
 - Blocks align to nearest grid cell on drop; return to supply if dropped outside grid
+- Double-click blocks to change color; 8 color options with custom bg/border/text colors
+- Design validation: blocks must be contiguous (touching at least one other block)
