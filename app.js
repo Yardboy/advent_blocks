@@ -1,748 +1,722 @@
-const GRID_SIZE = 9;
-const BLOCK_SIZE = 96;
-const CELL_SIZE = 100;
-const COLORS = ['bg-green', 'bg-red', 'bg-yellow', 'bg-blue'];
+// Constants
+const GRID_SIZE = 18;
+const CELL_SIZE = 50;
+const BLOCK_SIZE = 100;
+const NUM_BLOCKS = 24;
 
+// State management
+const gridState = {};
 let draggedBlock = null;
-let dragOffset = { x: 0, y: 0 };
-let gridBlocks = new Map(); // Map of "row,col" -> block element
+let draggedBlockOriginalParent = null;
+let draggedBlockOriginalPosition = null;
+let offsetX = 0;
+let offsetY = 0;
 
-// Initialize grid
-function initGrid() {
-    const grid = document.getElementById('grid');
-    for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'grid-cell';
-        cell.dataset.row = Math.floor(i / GRID_SIZE);
-        cell.dataset.col = i % GRID_SIZE;
-        grid.appendChild(cell);
+// Initialize the application
+function init() {
+    createGrid();
+    createSupplyBlocks();
+    setupEventListeners();
+}
+
+// Create the 50x50 grid
+function createGrid() {
+    const grid = document.getElementById('design-grid');
+    
+    for (let row = 0; row < GRID_SIZE; row++) {
+        for (let col = 0; col < GRID_SIZE; col++) {
+            const cell = document.createElement('div');
+            cell.className = 'grid-cell';
+            cell.dataset.row = row;
+            cell.dataset.col = col;
+            grid.appendChild(cell);
+        }
     }
 }
 
-// Initialize supply area
-function initSupply() {
-    const supply = document.getElementById('supply');
+// Create supply blocks (1-24 and blank)
+function createSupplyBlocks() {
+    const supplyArea = document.getElementById('supply-area');
     
-    // Add numbered blocks (1-24)
-    for (let i = 1; i <= 24; i++) {
-        const block = createBlock(i.toString(), false);
-        supply.appendChild(block);
+    // Create numbered blocks 1-24
+    for (let i = 1; i <= NUM_BLOCKS; i++) {
+        const block = createBlock(i);
+        supplyArea.appendChild(block);
     }
     
-    // Add blank block
-    const blankBlock = createBlock('', true);
-    supply.appendChild(blankBlock);
+    // Create blank block
+    const blankBlock = createBlock(0);
+    blankBlock.classList.add('blank');
+    supplyArea.appendChild(blankBlock);
 }
 
-// Create a block element
-function createBlock(text, isBlank) {
+// Create a single block element
+function createBlock(number) {
     const block = document.createElement('div');
-    block.className = 'block bg-green';
-    block.textContent = text;
-    block.dataset.isBlank = isBlank;
-    block.dataset.number = text;
+    block.className = 'block';
+    block.dataset.number = number;
     block.draggable = true;
+    
+    // Add number text
+    const numberText = document.createElement('span');
+    numberText.textContent = number === 0 ? '' : number;
+    numberText.style.position = 'relative';
+    numberText.style.top = '-2px';
+    block.appendChild(numberText);
     
     block.addEventListener('dragstart', handleDragStart);
     block.addEventListener('dragend', handleDragEnd);
-    block.addEventListener('dblclick', handleDoubleClick);
-    block.addEventListener('contextmenu', handleContextMenu);
+    block.addEventListener('dblclick', handleBlockDoubleClick);
     
     return block;
 }
 
+// Create a placeholder for a numbered block
+function createPlaceholder(number) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'block placeholder';
+    placeholder.dataset.number = number;
+    placeholder.textContent = number;
+    placeholder.draggable = false;
+    
+    return placeholder;
+}
+
 // Handle drag start
 function handleDragStart(e) {
-    draggedBlock = e.target;
-    draggedBlock.classList.add('dragging');
-    
-    const rect = draggedBlock.getBoundingClientRect();
-    dragOffset.x = e.clientX - rect.left;
-    dragOffset.y = e.clientY - rect.top;
-    
-    e.dataTransfer.effectAllowed = 'move';
+    try {
+        draggedBlock = e.target;
+        const rect = draggedBlock.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        
+        draggedBlockOriginalParent = draggedBlock.parentElement;
+        
+        // Store original position if on grid
+        if (draggedBlock.classList.contains('on-grid')) {
+            draggedBlockOriginalPosition = {
+                left: draggedBlock.style.left,
+                top: draggedBlock.style.top
+            };
+        }
+        
+        draggedBlock.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', draggedBlock.innerHTML);
+    } catch (error) {
+        console.error('Error in handleDragStart:', error);
+    }
 }
 
 // Handle drag end
 function handleDragEnd(e) {
-    if (!draggedBlock) return;
-    
-    draggedBlock.classList.remove('dragging');
-    
-    // Use the cursor position to determine which grid cell we're over
-    const cursorX = e.clientX;
-    const cursorY = e.clientY;
-    
-    const gridRect = document.getElementById('grid').getBoundingClientRect();
-    const isOverGrid = 
-        cursorX >= gridRect.left && 
-        cursorX < gridRect.right && 
-        cursorY >= gridRect.top && 
-        cursorY < gridRect.bottom;
-    
-    const wasOnGrid = draggedBlock.dataset.onGrid === 'true';
-    const isBlank = draggedBlock.dataset.isBlank === 'true';
-    
-    if (isOverGrid) {
-        // Calculate grid position based on cursor position
-        const col = Math.floor((cursorX - gridRect.left) / CELL_SIZE);
-        const row = Math.floor((cursorY - gridRect.top) / CELL_SIZE);
+    try {
+        if (!draggedBlock) return;
         
-        if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
-            const key = `${row},${col}`;
-            
-            // Check if cell is occupied
-            if (!gridBlocks.has(key)) {
-                // Remove from previous position
-                if (wasOnGrid) {
-                    removeBlockFromGrid(draggedBlock);
-                }
-                
-                // For blank blocks from supply, create a clone
-                let blockToPlace = draggedBlock;
-                if (isBlank && !wasOnGrid) {
-                    // Clone the blank block
-                    blockToPlace = createBlock('', true);
-                    // Copy the color from the dragged block
-                    COLORS.forEach(c => blockToPlace.classList.remove(c));
-                    const currentColor = COLORS.find(c => draggedBlock.classList.contains(c));
-                    if (currentColor) {
-                        blockToPlace.classList.add(currentColor);
-                    }
-                }
-                
-                // Place on grid
-                placeBlockOnGrid(blockToPlace, row, col);
-            }
+        draggedBlock.classList.remove('dragging');
+        
+        const gridElement = document.getElementById('design-grid');
+        const gridRect = gridElement.getBoundingClientRect();
+        
+        // Use cursor position instead of block corner
+        const cursorX = e.clientX;
+        const cursorY = e.clientY;
+        
+        // Check if cursor is on grid
+        const isOnGrid = cursorX >= gridRect.left && 
+                        cursorX <= gridRect.right &&
+                        cursorY >= gridRect.top && 
+                        cursorY <= gridRect.bottom;
+        
+        if (isOnGrid) {
+            placeBlockOnGrid(cursorX, cursorY, gridRect);
+        } else {
+            returnBlockToSupply();
         }
-    } else {
-        // Dropped outside grid
-        if (wasOnGrid) {
-            removeBlockFromGrid(draggedBlock);
-            
-            if (isBlank) {
-                // Blank blocks disappear
-                draggedBlock.remove();
-            } else {
-                // Numbered blocks return to supply
-                returnBlockToSupply(draggedBlock);
-            }
-        }
+        
+        draggedBlock = null;
+        draggedBlockOriginalParent = null;
+        draggedBlockOriginalPosition = null;
+    } catch (error) {
+        console.error('Error in handleDragEnd:', error);
     }
-    
-    draggedBlock = null;
 }
 
 // Place block on grid
-function placeBlockOnGrid(block, row, col) {
-    const grid = document.getElementById('grid');
+function placeBlockOnGrid(cursorX, cursorY, gridRect) {
+    const relativeX = cursorX - gridRect.left;
+    const relativeY = cursorY - gridRect.top;
     
-    // Remove block from DOM first to ensure clean layout calculation
-    if (block.parentElement) {
-        block.remove();
-    }
+    // Calculate grid cell where cursor is (this becomes top-left corner of block)
+    const col = Math.floor(relativeX / CELL_SIZE);
+    const row = Math.floor(relativeY / CELL_SIZE);
     
-    // Get the grid rect after removing the block
-    const gridRect = grid.getBoundingClientRect();
-    
-    // Find the actual grid cell at this position to get its exact position
-    const cells = grid.querySelectorAll('.grid-cell');
-    const cellIndex = row * GRID_SIZE + col;
-    const cell = cells[cellIndex];
-    const cellRect = cell.getBoundingClientRect();
-    
-    // Position the block to be centered in the cell
-    // Cell is 100px, block is 96px, so we need 2px offset
-    const scrollX = window.pageXOffset || window.scrollX || 0;
-    const scrollY = window.pageYOffset || window.scrollY || 0;
-    const blockOffset = 2; // (100 - 96) / 2 = 2px to center
-    
-    const finalLeft = cellRect.left + scrollX + blockOffset;
-    const finalTop = cellRect.top + scrollY + blockOffset;
-    
-    // Set positioning
-    block.style.position = 'absolute';
-    block.style.left = finalLeft + 'px';
-    block.style.top = finalTop + 'px';
-    block.dataset.onGrid = 'true';
-    block.dataset.gridRow = row;
-    block.dataset.gridCol = col;
-    
-    gridBlocks.set(`${row},${col}`, block);
-    
-    // Append to body to position absolutely
-    document.body.appendChild(block);
-}
-
-// Remove block from grid
-function removeBlockFromGrid(block) {
-    const row = block.dataset.gridRow;
-    const col = block.dataset.gridCol;
-    if (row !== undefined && col !== undefined) {
-        gridBlocks.delete(`${row},${col}`);
-    }
-    
-    delete block.dataset.onGrid;
-    delete block.dataset.gridRow;
-    delete block.dataset.gridCol;
-    block.style.position = '';
-    block.style.left = '';
-    block.style.top = '';
-}
-
-// Return numbered block to supply
-function returnBlockToSupply(block) {
-    removeBlockFromGrid(block);
-    const supply = document.getElementById('supply');
-    
-    // Get all blocks in supply
-    const allBlocks = Array.from(supply.children);
-    
-    // Add the returning block
-    allBlocks.push(block);
-    
-    // Sort blocks: numbered blocks in order, then blank blocks
-    allBlocks.sort((a, b) => {
-        const aIsBlank = a.dataset.isBlank === 'true';
-        const bIsBlank = b.dataset.isBlank === 'true';
-        
-        // Blank blocks go to the end
-        if (aIsBlank && !bIsBlank) return 1;
-        if (!aIsBlank && bIsBlank) return -1;
-        if (aIsBlank && bIsBlank) return 0;
-        
-        // Sort numbered blocks numerically
-        const aNum = parseInt(a.dataset.number);
-        const bNum = parseInt(b.dataset.number);
-        return aNum - bNum;
-    });
-    
-    // Clear and re-append in sorted order
-    supply.innerHTML = '';
-    allBlocks.forEach(b => supply.appendChild(b));
-}
-
-// Handle double-click to cycle colors
-function handleDoubleClick(e) {
-    const block = e.target;
-    const currentColorIndex = COLORS.findIndex(color => block.classList.contains(color));
-    const nextColorIndex = (currentColorIndex + 1) % COLORS.length;
-    
-    COLORS.forEach(color => block.classList.remove(color));
-    block.classList.add(COLORS[nextColorIndex]);
-}
-
-// Handle right-click context menu
-let contextMenuBlock = null;
-
-function handleContextMenu(e) {
-    e.preventDefault();
-    
-    const block = e.target;
-    
-    // Only show context menu for blocks that are positioned on the page (not in supply)
-    if (!block.style.position || block.style.position !== 'absolute') {
+    // Check if block fits completely on grid (2x2 cells)
+    if (col + 1 >= GRID_SIZE || row + 1 >= GRID_SIZE) {
+        returnBlockToSupply();
         return;
     }
     
-    contextMenuBlock = block;
+    // Check if cells are occupied
+    const cells = [
+        `${row},${col}`,
+        `${row},${col + 1}`,
+        `${row + 1},${col}`,
+        `${row + 1},${col + 1}`
+    ];
     
-    const menu = document.getElementById('contextMenu');
-    const menuItems = menu.querySelectorAll('.context-menu-item');
+    // Remove old position from grid state if moving from grid
+    if (draggedBlock.classList.contains('on-grid') && draggedBlockOriginalPosition) {
+        const oldRow = parseInt(draggedBlock.dataset.gridRow);
+        const oldCol = parseInt(draggedBlock.dataset.gridCol);
+        removeBlockFromGridState(oldRow, oldCol);
+    }
     
-    // For blocks on the grid, check adjacent cells
-    if (block.dataset.onGrid === 'true') {
-        const row = parseInt(block.dataset.gridRow);
-        const col = parseInt(block.dataset.gridCol);
-        
-        const grid = document.getElementById('grid');
-        const cells = grid.querySelectorAll('.grid-cell');
-        const scrollX = window.pageXOffset || window.scrollX || 0;
-        const scrollY = window.pageYOffset || window.scrollY || 0;
-        const halfCell = CELL_SIZE / 2;
-        const blockOffset = 2;
-        
-        // Get current cell position
-        const currentCellIndex = row * GRID_SIZE + col;
-        const currentCell = cells[currentCellIndex];
-        const currentCellRect = currentCell.getBoundingClientRect();
-        const currentLeft = currentCellRect.left + scrollX + blockOffset;
-        const currentTop = currentCellRect.top + scrollY + blockOffset;
-        
-        // Check which directions are available (no overlap)
-        const directions = {
-            up: row > 0 && !wouldOverlapWithBlock(currentLeft, currentTop - halfCell),
-            down: row < GRID_SIZE - 1 && !wouldOverlapWithBlock(currentLeft, currentTop + halfCell),
-            left: col > 0 && !wouldOverlapWithBlock(currentLeft - halfCell, currentTop),
-            right: col < GRID_SIZE - 1 && !wouldOverlapWithBlock(currentLeft + halfCell, currentTop)
+    // Check if any cell is occupied by a different block
+    const draggedBlockNumber = parseInt(draggedBlock.dataset.number);
+    const isMovingExistingBlock = draggedBlock.classList.contains('on-grid') && draggedBlockOriginalPosition;
+    
+    for (const cellKey of cells) {
+        if (gridState[cellKey]) {
+            // Allow if this is the same block being moved (not blank blocks, which can have multiple instances)
+            const isSameBlock = isMovingExistingBlock && 
+                               gridState[cellKey].blockNumber === draggedBlockNumber &&
+                               draggedBlockNumber !== 0;
+            
+            if (!isSameBlock) {
+                // Cell occupied by another block, return to original position or supply
+                if (draggedBlockOriginalPosition) {
+                    draggedBlock.style.left = draggedBlockOriginalPosition.left;
+                    draggedBlock.style.top = draggedBlockOriginalPosition.top;
+                    // Re-add to grid state since we removed it earlier
+                    const oldRow = parseInt(draggedBlock.dataset.gridRow);
+                    const oldCol = parseInt(draggedBlock.dataset.gridCol);
+                    const oldCells = [
+                        `${oldRow},${oldCol}`,
+                        `${oldRow},${oldCol + 1}`,
+                        `${oldRow + 1},${oldCol}`,
+                        `${oldRow + 1},${oldCol + 1}`
+                    ];
+                    const blockNum = parseInt(draggedBlock.dataset.number);
+                    const bgColor = window.getComputedStyle(draggedBlock).backgroundColor;
+                    for (const cellKey of oldCells) {
+                        gridState[cellKey] = {
+                            blockNumber: blockNum,
+                            backgroundColor: bgColor
+                        };
+                    }
+                } else {
+                    returnBlockToSupply();
+                }
+                validateDesign();
+                return;
+            }
+        }
+    }
+    
+    // Place block
+    const gridElement = document.getElementById('design-grid');
+    if (draggedBlock.parentElement !== gridElement) {
+        gridElement.appendChild(draggedBlock);
+    }
+    
+    draggedBlock.classList.add('on-grid');
+    draggedBlock.style.left = `${col * CELL_SIZE}px`;
+    draggedBlock.style.top = `${row * CELL_SIZE}px`;
+    draggedBlock.dataset.gridRow = row;
+    draggedBlock.dataset.gridCol = col;
+    
+    // Update grid state
+    const blockNumber = parseInt(draggedBlock.dataset.number);
+    const backgroundColor = window.getComputedStyle(draggedBlock).backgroundColor;
+    
+    for (const cellKey of cells) {
+        gridState[cellKey] = {
+            blockNumber: blockNumber,
+            backgroundColor: backgroundColor
         };
+    }
+    
+    // If it's a blank block (0), keep it in supply
+    if (blockNumber === 0) {
+        const supplyArea = document.getElementById('supply-area');
+        const hasBlankInSupply = Array.from(supplyArea.children).some(
+            child => child.dataset.number === '0'
+        );
         
-        // Show/hide menu items based on available directions
-        menuItems.forEach(item => {
-            const direction = item.dataset.direction;
-            if (directions[direction]) {
-                item.classList.remove('hidden');
-            } else {
-                item.classList.add('hidden');
-            }
-        });
+        if (!hasBlankInSupply) {
+            const newBlankBlock = createBlock(0);
+            newBlankBlock.classList.add('blank');
+            supplyArea.appendChild(newBlankBlock);
+        }
     } else {
-        // For shifted blocks, only show directions on the same axis
-        const shiftAxis = block.dataset.shiftAxis;
-        const blockRect = block.getBoundingClientRect();
-        const grid = document.getElementById('grid');
-        const gridRect = grid.getBoundingClientRect();
-        
-        // Calculate which grid cells the block is between
-        const scrollX = window.pageXOffset || window.scrollX || 0;
-        const scrollY = window.pageYOffset || window.scrollY || 0;
-        
-        // Get block center relative to grid
-        const blockCenterX = blockRect.left + (BLOCK_SIZE / 2) - gridRect.left;
-        const blockCenterY = blockRect.top + (BLOCK_SIZE / 2) - gridRect.top;
-        
-        // Determine which cells the block is near
-        const nearCol = Math.floor(blockCenterX / CELL_SIZE);
-        const nearRow = Math.floor(blockCenterY / CELL_SIZE);
-        
-        // Get current position of shifted block
-        const currentLeft = parseFloat(block.style.left);
-        const currentTop = parseFloat(block.style.top);
-        const halfCell = CELL_SIZE / 2;
-        
-        menuItems.forEach(item => {
-            const direction = item.dataset.direction;
-            let shouldShow = false;
-            
-            // Calculate new position for this direction
-            let newLeft = currentLeft;
-            let newTop = currentTop;
-            
-            switch(direction) {
-                case 'up':
-                    newTop -= halfCell;
-                    break;
-                case 'down':
-                    newTop += halfCell;
-                    break;
-                case 'left':
-                    newLeft -= halfCell;
-                    break;
-                case 'right':
-                    newLeft += halfCell;
-                    break;
-            }
-            
-            // Only show directions on the same axis as the shift
-            if (shiftAxis === 'vertical' && (direction === 'up' || direction === 'down')) {
-                // Check bounds and overlap
-                if ((direction === 'up' && nearRow > 0) || (direction === 'down' && nearRow < GRID_SIZE - 1)) {
-                    shouldShow = !wouldOverlapWithBlock(newLeft, newTop);
-                }
-            } else if (shiftAxis === 'horizontal' && (direction === 'left' || direction === 'right')) {
-                // Check bounds and overlap
-                if ((direction === 'left' && nearCol > 0) || (direction === 'right' && nearCol < GRID_SIZE - 1)) {
-                    shouldShow = !wouldOverlapWithBlock(newLeft, newTop);
-                }
-            }
-            
-            if (shouldShow) {
-                item.classList.remove('hidden');
-            } else {
-                item.classList.add('hidden');
-            }
-        });
-    }
-    
-    // Position and show the menu
-    menu.style.left = e.pageX + 'px';
-    menu.style.top = e.pageY + 'px';
-    menu.classList.remove('hidden');
-}
-
-// Shift block in a direction
-function shiftBlock(direction) {
-    if (!contextMenuBlock) return;
-    
-    const scrollX = window.pageXOffset || window.scrollX || 0;
-    const scrollY = window.pageYOffset || window.scrollY || 0;
-    const halfCell = CELL_SIZE / 2;
-    
-    let newLeft, newTop;
-    
-    if (contextMenuBlock.dataset.onGrid === 'true') {
-        // Block is on grid - shift from grid position
-        const row = parseInt(contextMenuBlock.dataset.gridRow);
-        const col = parseInt(contextMenuBlock.dataset.gridCol);
-        
-        // Get the current cell
-        const grid = document.getElementById('grid');
-        const cells = grid.querySelectorAll('.grid-cell');
-        const currentCellIndex = row * GRID_SIZE + col;
-        const currentCell = cells[currentCellIndex];
-        const currentCellRect = currentCell.getBoundingClientRect();
-        
-        const blockOffset = 2; // Original offset to center block in cell
-        newLeft = currentCellRect.left + scrollX + blockOffset;
-        newTop = currentCellRect.top + scrollY + blockOffset;
-        
-        // Remove from grid tracking
-        const oldKey = `${row},${col}`;
-        gridBlocks.delete(oldKey);
-        
-        // Mark as no longer on grid
-        delete contextMenuBlock.dataset.onGrid;
-        delete contextMenuBlock.dataset.gridRow;
-        delete contextMenuBlock.dataset.gridCol;
-    } else {
-        // Block is already shifted - shift from current position
-        newLeft = parseFloat(contextMenuBlock.style.left);
-        newTop = parseFloat(contextMenuBlock.style.top);
-    }
-    
-    // Adjust position based on direction
-    switch(direction) {
-        case 'up':
-            newTop -= halfCell;
-            break;
-        case 'down':
-            newTop += halfCell;
-            break;
-        case 'left':
-            newLeft -= halfCell;
-            break;
-        case 'right':
-            newLeft += halfCell;
-            break;
-    }
-    
-    // Update block position
-    contextMenuBlock.style.position = 'absolute';
-    contextMenuBlock.style.left = newLeft + 'px';
-    contextMenuBlock.style.top = newTop + 'px';
-    
-    // Check if the block is now centered in a grid cell
-    const grid = document.getElementById('grid');
-    const gridRect = grid.getBoundingClientRect();
-    const cells = grid.querySelectorAll('.grid-cell');
-    
-    let isCentered = false;
-    let centeredRow = -1;
-    let centeredCol = -1;
-    
-    for (let i = 0; i < cells.length; i++) {
-        const cell = cells[i];
-        const cellRect = cell.getBoundingClientRect();
-        const blockOffset = 2;
-        const expectedLeft = cellRect.left + scrollX + blockOffset;
-        const expectedTop = cellRect.top + scrollY + blockOffset;
-        
-        // Check if block is centered in this cell (within 1px tolerance)
-        if (Math.abs(newLeft - expectedLeft) < 1 && Math.abs(newTop - expectedTop) < 1) {
-            centeredRow = Math.floor(i / GRID_SIZE);
-            centeredCol = i % GRID_SIZE;
-            isCentered = true;
-            break;
+        // For numbered blocks, create a placeholder in supply if coming from supply
+        if (draggedBlockOriginalParent && draggedBlockOriginalParent.id === 'supply-area') {
+            const placeholder = createPlaceholder(blockNumber);
+            draggedBlockOriginalParent.appendChild(placeholder);
+            sortSupplyArea();
         }
     }
     
-    if (isCentered) {
-        // Block is back on grid - restore grid status
-        contextMenuBlock.dataset.onGrid = 'true';
-        contextMenuBlock.dataset.gridRow = centeredRow;
-        contextMenuBlock.dataset.gridCol = centeredCol;
-        delete contextMenuBlock.dataset.shiftAxis;
-        
-        // Add to grid tracking
-        gridBlocks.set(`${centeredRow},${centeredCol}`, contextMenuBlock);
-    } else {
-        // Store which axis this block is shifted on
-        if (direction === 'up' || direction === 'down') {
-            contextMenuBlock.dataset.shiftAxis = 'vertical';
-        } else {
-            contextMenuBlock.dataset.shiftAxis = 'horizontal';
-        }
-    }
-    
-    // Hide menu
-    hideContextMenu();
+    // Validate design after placing block
+    validateDesign();
 }
 
-// Check if a block at a given position would overlap with any other block
-function wouldOverlapWithBlock(newLeft, newTop) {
-    const allBlocks = document.querySelectorAll('.block');
+// Return block to supply
+function returnBlockToSupply() {
+    const blockNumber = parseInt(draggedBlock.dataset.number);
     
-    for (let block of allBlocks) {
-        // Skip the block we're checking for (the one with the context menu)
-        if (block === contextMenuBlock) continue;
-        
-        // Only check blocks that are positioned absolutely (on grid or shifted)
-        if (block.style.position === 'absolute') {
-            const blockLeft = parseFloat(block.style.left);
-            const blockTop = parseFloat(block.style.top);
-            
-            // Calculate the bounding boxes
-            // New position box
-            const newRight = newLeft + BLOCK_SIZE;
-            const newBottom = newTop + BLOCK_SIZE;
-            
-            // Existing block box
-            const blockRight = blockLeft + BLOCK_SIZE;
-            const blockBottom = blockTop + BLOCK_SIZE;
-            
-            // Check for rectangle overlap (AABB collision detection)
-            const xOverlap = newLeft < blockRight && newRight > blockLeft;
-            const yOverlap = newTop < blockBottom && newBottom > blockTop;
-            
-            if (xOverlap && yOverlap) {
-                return true;
-            }
-        }
-    }
-    
-    return false;
-}
-
-// Check if there's a shifted block at a specific position that would block movement
-function hasShiftedBlockAt(fromRow, fromCol, toRow, toCol, axis) {
-    const grid = document.getElementById('grid');
-    const gridRect = grid.getBoundingClientRect();
-    
-    // Get all blocks on the page that are shifted (exclude the current context menu block)
-    const allBlocks = document.querySelectorAll('.block');
-    
-    for (let block of allBlocks) {
-        // Skip the block we're checking for (the one with the context menu)
-        if (block === contextMenuBlock) continue;
-        
-        if (block.dataset.shiftAxis === axis && block.style.position === 'absolute') {
-            const blockRect = block.getBoundingClientRect();
-            const blockCenterX = blockRect.left + (BLOCK_SIZE / 2) - gridRect.left;
-            const blockCenterY = blockRect.top + (BLOCK_SIZE / 2) - gridRect.top;
-            
-            const blockNearCol = Math.floor(blockCenterX / CELL_SIZE);
-            const blockNearRow = Math.floor(blockCenterY / CELL_SIZE);
-            
-            // Check if this block is in the position we want to move to
-            if (axis === 'vertical') {
-                // Check if block is between the same two rows
-                if (blockNearCol === fromCol && blockNearRow === Math.min(fromRow, toRow)) {
-                    return true;
-                }
-            } else { // horizontal
-                // Check if block is between the same two columns
-                if (blockNearRow === fromRow && blockNearCol === Math.min(fromCol, toCol)) {
-                    return true;
-                }
-            }
-        }
-    }
-    
-    return false;
-}
-
-function hideContextMenu() {
-    const menu = document.getElementById('contextMenu');
-    menu.classList.add('hidden');
-    contextMenuBlock = null;
-}
-
-// Capture grid state as JSON
-function captureGridState() {
-    const scene = {
-        blocks: []
-    };
-    
-    // Get all blocks that are positioned on the page (grid or shifted)
-    const allBlocks = document.querySelectorAll('.block');
-    
-    allBlocks.forEach(block => {
-        if (block.style.position === 'absolute') {
-            const blockData = {
-                number: block.dataset.number,
-                isBlank: block.dataset.isBlank === 'true',
-                left: parseFloat(block.style.left),
-                top: parseFloat(block.style.top),
-                color: COLORS.find(c => block.classList.contains(c)) || 'bg-green',
-                onGrid: block.dataset.onGrid === 'true'
-            };
-            
-            if (blockData.onGrid) {
-                blockData.row = parseInt(block.dataset.gridRow);
-                blockData.col = parseInt(block.dataset.gridCol);
-            }
-            
-            if (block.dataset.shiftAxis) {
-                blockData.shiftAxis = block.dataset.shiftAxis;
-            }
-            
-            scene.blocks.push(blockData);
-        }
-    });
-    
-    const sceneJSON = JSON.stringify(scene);
-    
-    // Copy to clipboard
-    navigator.clipboard.writeText(sceneJSON).then(() => {
-        alert('Scene copied to clipboard!');
-    }).catch(err => {
-        console.error('Failed to copy to clipboard: ', err);
-        alert('Failed to copy to clipboard');
-    });
-}
-
-// Load scene from JSON
-function loadScene() {
-    const sceneJSON = document.getElementById('gridData').value;
-    
-    if (!sceneJSON.trim()) {
-        alert('No scene data to load');
+    // If it's a blank block on grid, just remove it
+    if (blockNumber === 0 && draggedBlock.classList.contains('on-grid')) {
+        const row = parseInt(draggedBlock.dataset.gridRow);
+        const col = parseInt(draggedBlock.dataset.gridCol);
+        removeBlockFromGridState(row, col);
+        draggedBlock.remove();
         return;
     }
     
-    try {
-        const scene = JSON.parse(sceneJSON);
+    // Remove from grid state if it was on grid
+    if (draggedBlock.classList.contains('on-grid')) {
+        const row = parseInt(draggedBlock.dataset.gridRow);
+        const col = parseInt(draggedBlock.dataset.gridCol);
+        removeBlockFromGridState(row, col);
+    }
+    
+    // Return numbered block to supply
+    draggedBlock.classList.remove('on-grid');
+    draggedBlock.style.left = '';
+    draggedBlock.style.top = '';
+    delete draggedBlock.dataset.gridRow;
+    delete draggedBlock.dataset.gridCol;
+    
+    const supplyArea = document.getElementById('supply-area');
+    
+    // Only add back if it's not already in supply (numbered blocks only)
+    if (blockNumber !== 0) {
+        // Find and replace placeholder if it exists
+        const placeholder = Array.from(supplyArea.children).find(
+            child => child.classList.contains('placeholder') && 
+                     child.dataset.number === draggedBlock.dataset.number
+        );
         
-        // Clear all blocks from grid
-        const allBlocks = document.querySelectorAll('.block');
-        allBlocks.forEach(block => {
-            if (block.style.position === 'absolute') {
-                // Remove from grid tracking
-                if (block.dataset.onGrid === 'true') {
-                    const row = parseInt(block.dataset.gridRow);
-                    const col = parseInt(block.dataset.gridCol);
-                    gridBlocks.delete(`${row},${col}`);
-                }
-                
-                // Return to supply
-                const supply = document.getElementById('supply');
-                block.style.position = '';
-                block.style.left = '';
-                block.style.top = '';
-                delete block.dataset.onGrid;
-                delete block.dataset.gridRow;
-                delete block.dataset.gridCol;
-                delete block.dataset.shiftAxis;
-                
-                // Reset to green
-                COLORS.forEach(c => block.classList.remove(c));
-                block.classList.add('bg-green');
-                
-                supply.appendChild(block);
-            }
-        });
-        
-        // Re-sort supply
-        const supply = document.getElementById('supply');
-        const supplyBlocks = Array.from(supply.children);
-        supplyBlocks.sort((a, b) => {
-            const aIsBlank = a.dataset.isBlank === 'true';
-            const bIsBlank = b.dataset.isBlank === 'true';
-            if (aIsBlank && !bIsBlank) return 1;
-            if (!aIsBlank && bIsBlank) return -1;
-            if (aIsBlank && bIsBlank) return 0;
-            const aNum = parseInt(a.dataset.number);
-            const bNum = parseInt(b.dataset.number);
-            return aNum - bNum;
-        });
-        supply.innerHTML = '';
-        supplyBlocks.forEach(b => supply.appendChild(b));
-        
-        // Place blocks according to scene data
-        scene.blocks.forEach(blockData => {
-            let blockToPlace;
+        if (placeholder) {
+            supplyArea.replaceChild(draggedBlock, placeholder);
+            sortSupplyArea();
+        } else {
+            const existingInSupply = Array.from(supplyArea.children).find(
+                child => child.dataset.number === draggedBlock.dataset.number
+            );
             
-            if (blockData.isBlank) {
-                // For blank blocks, always create a new one (never remove from supply)
-                blockToPlace = createBlock('', true);
+            if (!existingInSupply) {
+                supplyArea.appendChild(draggedBlock);
+                sortSupplyArea();
+            }
+        }
+    }
+    
+    // Validate design after returning block
+    validateDesign();
+}
+
+// Remove block from grid state
+function removeBlockFromGridState(row, col) {
+    const cells = [
+        `${row},${col}`,
+        `${row},${col + 1}`,
+        `${row + 1},${col}`,
+        `${row + 1},${col + 1}`
+    ];
+    
+    for (const cellKey of cells) {
+        delete gridState[cellKey];
+    }
+}
+
+// Sort supply area blocks by number
+function sortSupplyArea() {
+    const supplyArea = document.getElementById('supply-area');
+    const blocks = Array.from(supplyArea.children);
+    
+    blocks.sort((a, b) => {
+        const numA = parseInt(a.dataset.number);
+        const numB = parseInt(b.dataset.number);
+        
+        // Blank block (0) always goes last
+        if (numA === 0) return 1;
+        if (numB === 0) return -1;
+        
+        return numA - numB;
+    });
+    
+    // Re-append in sorted order
+    blocks.forEach(block => supplyArea.appendChild(block));
+}
+
+// Setup event listeners for buttons
+function setupEventListeners() {
+    document.getElementById('capture-btn').addEventListener('click', captureScene);
+    document.getElementById('load-btn').addEventListener('click', loadScene);
+    document.getElementById('reset-btn').addEventListener('click', resetPage);
+    
+    // Close context menu when clicking anywhere
+    document.addEventListener('click', closeContextMenu);
+}
+
+// Reset page with confirmation
+function resetPage() {
+    if (confirm('Are you sure you want to reset? This will clear all blocks and reload the page.')) {
+        location.reload();
+    }
+}
+
+// Capture scene to clipboard
+function captureScene() {
+    try {
+        // Get all blocks on grid
+        const gridElement = document.getElementById('design-grid');
+        const blocksOnGrid = gridElement.querySelectorAll('.block');
+        
+        // Do nothing if no blocks on grid
+        if (blocksOnGrid.length === 0) {
+            return;
+        }
+        
+        const blocks = [];
+        blocksOnGrid.forEach(block => {
+            const row = parseInt(block.dataset.gridRow);
+            const col = parseInt(block.dataset.gridCol);
+            const blockNumber = parseInt(block.dataset.number);
+            const backgroundColor = block.style.backgroundColor || window.getComputedStyle(block).backgroundColor;
+            const borderColor = block.style.borderColor || window.getComputedStyle(block).borderColor;
+            const textColor = block.style.color || window.getComputedStyle(block).color;
+            
+            blocks.push({
+                row,
+                col,
+                number: blockNumber,
+                bgColor: backgroundColor,
+                borderColor: borderColor,
+                textColor: textColor
+            });
+        });
+        
+        const sceneData = JSON.stringify(blocks);
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(sceneData).then(() => {
+            alert('Scene captured to clipboard!');
+        }).catch(err => {
+            console.error('Failed to copy to clipboard:', err);
+            alert('Error copying to clipboard');
+        });
+    } catch (error) {
+        console.error('Error in captureScene:', error);
+        alert('Error capturing scene');
+    }
+}
+
+// Load scene from textarea
+function loadScene() {
+    try {
+        const textarea = document.getElementById('scene-data');
+        const sceneData = textarea.value.trim();
+        
+        if (!sceneData) {
+            return;
+        }
+        
+        const blocks = JSON.parse(sceneData);
+        
+        // Clear current grid
+        clearGrid();
+        
+        // Recreate blocks from loaded data
+        const gridElement = document.getElementById('design-grid');
+        const supplyArea = document.getElementById('supply-area');
+        
+        blocks.forEach(blockData => {
+            const { row, col, number, bgColor, borderColor, textColor } = blockData;
+            
+            // Create or find block
+            let block;
+            
+            if (number === 0) {
+                block = createBlock(0);
+                block.classList.add('blank');
             } else {
-                // For numbered blocks, find and use the existing block
-                blockToPlace = Array.from(allBlocks).find(b => 
-                    b.dataset.number === blockData.number && 
-                    b.dataset.isBlank === String(blockData.isBlank)
+                // Find existing block in supply area
+                block = Array.from(supplyArea.children).find(
+                    child => parseInt(child.dataset.number) === number && 
+                             !child.classList.contains('placeholder')
                 );
                 
-                if (blockToPlace && blockToPlace.parentElement) {
-                    blockToPlace.remove();
+                if (!block) {
+                    block = createBlock(number);
                 }
             }
             
-            if (blockToPlace) {
-                // Set color
-                COLORS.forEach(c => blockToPlace.classList.remove(c));
-                blockToPlace.classList.add(blockData.color);
-                
-                // Position the block
-                blockToPlace.style.position = 'absolute';
-                blockToPlace.style.left = blockData.left + 'px';
-                blockToPlace.style.top = blockData.top + 'px';
-                
-                if (blockData.onGrid) {
-                    blockToPlace.dataset.onGrid = 'true';
-                    blockToPlace.dataset.gridRow = blockData.row;
-                    blockToPlace.dataset.gridCol = blockData.col;
-                    gridBlocks.set(`${blockData.row},${blockData.col}`, blockToPlace);
-                } else {
-                    delete blockToPlace.dataset.onGrid;
-                    delete blockToPlace.dataset.gridRow;
-                    delete blockToPlace.dataset.gridCol;
-                }
-                
-                if (blockData.shiftAxis) {
-                    blockToPlace.dataset.shiftAxis = blockData.shiftAxis;
-                } else {
-                    delete blockToPlace.dataset.shiftAxis;
-                }
-                
-                document.body.appendChild(blockToPlace);
+            // Place block on grid
+            gridElement.appendChild(block);
+            
+            block.classList.add('on-grid');
+            block.style.left = `${col * CELL_SIZE}px`;
+            block.style.top = `${row * CELL_SIZE}px`;
+            block.style.backgroundColor = bgColor;
+            block.style.borderColor = borderColor;
+            block.style.color = textColor;
+            block.dataset.gridRow = row;
+            block.dataset.gridCol = col;
+            
+            // Update grid state
+            const cells = [
+                `${row},${col}`,
+                `${row},${col + 1}`,
+                `${row + 1},${col}`,
+                `${row + 1},${col + 1}`
+            ];
+            
+            for (const cellKey of cells) {
+                gridState[cellKey] = {
+                    blockNumber: number,
+                    backgroundColor: bgColor
+                };
+            }
+            
+            // If numbered block, create placeholder in supply
+            if (number !== 0) {
+                const placeholder = createPlaceholder(number);
+                supplyArea.appendChild(placeholder);
+                sortSupplyArea();
             }
         });
         
-        // Clear the text area after successful load
-        document.getElementById('gridData').value = '';
         alert('Scene loaded successfully!');
-    } catch (e) {
-        alert('Error loading scene: ' + e.message);
+    } catch (error) {
+        console.error('Error in loadScene:', error);
+        alert('Error loading scene. Please check the data format.');
     }
 }
 
-// Initialize app
-document.addEventListener('DOMContentLoaded', () => {
-    initGrid();
-    initSupply();
+// Clear grid
+function clearGrid() {
+    const gridElement = document.getElementById('design-grid');
+    const blocksOnGrid = gridElement.querySelectorAll('.block');
     
-    // Capture button
-    document.getElementById('captureBtn').addEventListener('click', captureGridState);
+    blocksOnGrid.forEach(block => {
+        const blockNumber = parseInt(block.dataset.number);
+        if (blockNumber !== 0) {
+            returnBlockToSupply();
+        }
+        block.remove();
+    });
     
-    // Load button
-    document.getElementById('loadBtn').addEventListener('click', loadScene);
-    
-    // Allow drops on grid
-    const grid = document.getElementById('grid');
-    grid.addEventListener('dragover', (e) => {
+    // Clear grid state
+    for (const key in gridState) {
+        delete gridState[key];
+    }
+}
+
+// Color options with their properties
+const COLOR_OPTIONS = [
+    { name: 'Red', bg: '#f44336', border: '#c62828', textColor: 'white' },
+    { name: 'Green', bg: '#4caf50', border: '#14532d', textColor: 'white' },
+    { name: 'Blue', bg: '#2196f3', border: '#0d47a1', textColor: 'white' },
+    { name: 'White', bg: '#ffffff', border: '#999999', textColor: 'black' },
+    { name: 'Gold', bg: '#ffc107', border: '#b8860b', textColor: 'black' },
+    { name: 'Silver', bg: '#c0c0c0', border: '#808080', textColor: 'black' },
+    { name: 'Brown', bg: '#795548', border: '#3e2723', textColor: 'white' },
+    { name: 'Yellow', bg: '#ffee58', border: '#b8860b', textColor: 'black' }
+];
+
+let currentContextBlock = null;
+
+// Handle block double-click
+function handleBlockDoubleClick(e) {
+    try {
         e.preventDefault();
-    });
-    
-    // Context menu event listeners
-    const contextMenu = document.getElementById('contextMenu');
-    const menuItems = contextMenu.querySelectorAll('.context-menu-item');
-    
-    menuItems.forEach(item => {
-        item.addEventListener('click', () => {
-            const direction = item.dataset.direction;
-            shiftBlock(direction);
+        e.stopPropagation();
+        
+        const block = e.currentTarget;
+        
+        // Don't show menu for placeholders
+        if (block.classList.contains('placeholder')) {
+            return;
+        }
+        
+        currentContextBlock = block;
+        
+        // Remove existing context menu
+        closeContextMenu();
+        
+        // Get block position
+        const rect = block.getBoundingClientRect();
+        
+        // Create context menu
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.id = 'color-context-menu';
+        menu.style.left = `${rect.left}px`;
+        menu.style.top = `${rect.bottom + 5}px`;
+        
+        // Add color options
+        COLOR_OPTIONS.forEach(color => {
+            const item = document.createElement('div');
+            item.className = 'context-menu-item';
+            
+            const preview = document.createElement('div');
+            preview.className = 'color-preview';
+            preview.style.backgroundColor = color.bg;
+            preview.style.borderColor = color.border;
+            
+            const label = document.createElement('span');
+            label.textContent = color.name;
+            
+            item.appendChild(preview);
+            item.appendChild(label);
+            
+            item.addEventListener('click', (event) => {
+                event.stopPropagation();
+                changeBlockColor(color);
+                closeContextMenu();
+            });
+            
+            menu.appendChild(item);
         });
-    });
+        
+        document.body.appendChild(menu);
+    } catch (error) {
+        console.error('Error in handleBlockDoubleClick:', error);
+    }
+}
+
+// Close context menu
+function closeContextMenu() {
+    const menu = document.getElementById('color-context-menu');
+    if (menu) {
+        menu.remove();
+    }
+}
+
+// Change block color
+function changeBlockColor(color) {
+    if (!currentContextBlock) return;
     
-    // Hide context menu when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!contextMenu.contains(e.target) && e.button !== 2) {
-            hideContextMenu();
+    try {
+        currentContextBlock.style.backgroundColor = color.bg;
+        currentContextBlock.style.borderColor = color.border;
+        currentContextBlock.style.color = color.textColor;
+        
+        // Update grid state if block is on grid
+        if (currentContextBlock.classList.contains('on-grid')) {
+            const row = parseInt(currentContextBlock.dataset.gridRow);
+            const col = parseInt(currentContextBlock.dataset.gridCol);
+            
+            const cells = [
+                `${row},${col}`,
+                `${row},${col + 1}`,
+                `${row + 1},${col}`,
+                `${row + 1},${col + 1}`
+            ];
+            
+            for (const cellKey of cells) {
+                if (gridState[cellKey]) {
+                    gridState[cellKey].backgroundColor = color.bg;
+                }
+            }
+        }
+        
+        currentContextBlock = null;
+    } catch (error) {
+        console.error('Error in changeBlockColor:', error);
+    }
+}
+
+// Validate design and check for errors
+function validateDesign() {
+    const errors = new Set();
+    const errorCells = new Set();
+    const gridElement = document.getElementById('design-grid');
+    const blocksOnGrid = Array.from(gridElement.querySelectorAll('.block'));
+    
+    // Clear all existing error cell highlights
+    const allCells = gridElement.querySelectorAll('.grid-cell');
+    allCells.forEach(cell => cell.classList.remove('error-cell'));
+    
+    if (blocksOnGrid.length === 0) {
+        displayErrors([]);
+        return;
+    }
+    
+    // Check for contiguity - all blocks should touch at least one other block
+    if (blocksOnGrid.length > 1) {
+        // For each block, check if all its border cells are empty
+        for (const block of blocksOnGrid) {
+            const row = parseInt(block.dataset.gridRow);
+            const col = parseInt(block.dataset.gridCol);
+            
+            // Define the 8 border cells around this 2x2 block
+            // Top row (above the block)
+            // Left column (to the left)
+            // Right column (to the right)
+            // Bottom row (below the block)
+            const borderCells = [
+                // Top edge (2 cells above)
+                `${row - 1},${col}`,
+                `${row - 1},${col + 1}`,
+                // Bottom edge (2 cells below)
+                `${row + 2},${col}`,
+                `${row + 2},${col + 1}`,
+                // Left edge (2 cells to the left)
+                `${row},${col - 1}`,
+                `${row + 1},${col - 1}`,
+                // Right edge (2 cells to the right)
+                `${row},${col + 2}`,
+                `${row + 1},${col + 2}`
+            ];
+            
+            // Check if any border cell is occupied
+            let hasNeighbor = false;
+            for (const cellKey of borderCells) {
+                if (gridState[cellKey]) {
+                    hasNeighbor = true;
+                    break;
+                }
+            }
+            
+            // If all border cells are empty, this block is isolated
+            if (!hasNeighbor) {
+                errors.add('Design has non-contiguous blocks');
+                break; // Only need to report the error once
+            }
+        }
+    }
+    
+    // Apply error cell highlighting
+    errorCells.forEach(cellKey => {
+        const [row, col] = cellKey.split(',').map(Number);
+        const cellIndex = row * GRID_SIZE + col;
+        const cell = allCells[cellIndex];
+        if (cell) {
+            cell.classList.add('error-cell');
         }
     });
     
-    // Prevent context menu from closing when right-clicking on it
-    contextMenu.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-    });
-});
+    displayErrors(Array.from(errors));
+}
+
+// Display design errors
+function displayErrors(errors) {
+    const errorSection = document.getElementById('design-errors');
+    const errorList = document.getElementById('error-list');
+    
+    if (errors.length === 0) {
+        errorSection.classList.add('hidden');
+        errorList.innerHTML = '';
+    } else {
+        errorSection.classList.remove('hidden');
+        errorList.innerHTML = errors.map(error => `<li>${error}</li>`).join('');
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', init);
