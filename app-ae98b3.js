@@ -2,6 +2,10 @@
 const GRID_SIZE = 18;
 const CELL_SIZE = 50;
 const BLOCK_SIZE = 100;
+const HALF_BLOCK_VERTICAL_WIDTH = 50;
+const HALF_BLOCK_VERTICAL_HEIGHT = 100;
+const HALF_BLOCK_HORIZONTAL_WIDTH = 100;
+const HALF_BLOCK_HORIZONTAL_HEIGHT = 50;
 const NUM_BLOCKS = 24;
 
 // State management
@@ -44,17 +48,28 @@ function createSupplyBlocks() {
         supplyArea.appendChild(block);
     }
     
-    // Create blank block
+    // Create blank block (full size)
     const blankBlock = createBlock(0);
     blankBlock.classList.add('blank');
     supplyArea.appendChild(blankBlock);
+    
+    // Create half-size vertical blank block (50px x 100px)
+    const halfVerticalBlock = createBlock(0, 'half-vertical');
+    halfVerticalBlock.classList.add('blank', 'half-vertical');
+    supplyArea.appendChild(halfVerticalBlock);
+    
+    // Create half-size horizontal blank block (100px x 50px)
+    const halfHorizontalBlock = createBlock(0, 'half-horizontal');
+    halfHorizontalBlock.classList.add('blank', 'half-horizontal');
+    supplyArea.appendChild(halfHorizontalBlock);
 }
 
 // Create a single block element
-function createBlock(number) {
+function createBlock(number, blockType = 'full') {
     const block = document.createElement('div');
     block.className = 'block';
     block.dataset.number = number;
+    block.dataset.blockType = blockType;
     block.draggable = true;
     
     // Add number text
@@ -151,25 +166,51 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
     const col = Math.floor(relativeX / CELL_SIZE);
     const row = Math.floor(relativeY / CELL_SIZE);
     
-    // Check if block fits completely on grid (2x2 cells)
-    if (col + 1 >= GRID_SIZE || row + 1 >= GRID_SIZE) {
-        returnBlockToSupply();
-        return;
-    }
+    // Get block type and determine cells it will occupy
+    const blockType = draggedBlock.dataset.blockType || 'full';
+    let cells = [];
     
-    // Check if cells are occupied
-    const cells = [
-        `${row},${col}`,
-        `${row},${col + 1}`,
-        `${row + 1},${col}`,
-        `${row + 1},${col + 1}`
-    ];
+    // Check if block fits completely on grid based on its size
+    if (blockType === 'half-vertical') {
+        // 50px x 100px (1 cell wide, 2 cells tall)
+        if (col >= GRID_SIZE || row + 1 >= GRID_SIZE) {
+            returnBlockToSupply();
+            return;
+        }
+        cells = [
+            `${row},${col}`,
+            `${row + 1},${col}`
+        ];
+    } else if (blockType === 'half-horizontal') {
+        // 100px x 50px (2 cells wide, 1 cell tall)
+        if (col + 1 >= GRID_SIZE || row >= GRID_SIZE) {
+            returnBlockToSupply();
+            return;
+        }
+        cells = [
+            `${row},${col}`,
+            `${row},${col + 1}`
+        ];
+    } else {
+        // Full size: 100px x 100px (2x2 cells)
+        if (col + 1 >= GRID_SIZE || row + 1 >= GRID_SIZE) {
+            returnBlockToSupply();
+            return;
+        }
+        cells = [
+            `${row},${col}`,
+            `${row},${col + 1}`,
+            `${row + 1},${col}`,
+            `${row + 1},${col + 1}`
+        ];
+    }
     
     // Remove old position from grid state if moving from grid
     if (draggedBlock.classList.contains('on-grid') && draggedBlockOriginalPosition) {
         const oldRow = parseInt(draggedBlock.dataset.gridRow);
         const oldCol = parseInt(draggedBlock.dataset.gridCol);
-        removeBlockFromGridState(oldRow, oldCol);
+        const oldBlockType = draggedBlock.dataset.blockType || 'full';
+        removeBlockFromGridState(oldRow, oldCol, oldBlockType);
     }
     
     // Check if any cell is occupied by a different block
@@ -191,12 +232,28 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
                     // Re-add to grid state since we removed it earlier
                     const oldRow = parseInt(draggedBlock.dataset.gridRow);
                     const oldCol = parseInt(draggedBlock.dataset.gridCol);
-                    const oldCells = [
-                        `${oldRow},${oldCol}`,
-                        `${oldRow},${oldCol + 1}`,
-                        `${oldRow + 1},${oldCol}`,
-                        `${oldRow + 1},${oldCol + 1}`
-                    ];
+                    const oldBlockType = draggedBlock.dataset.blockType || 'full';
+                    let oldCells = [];
+                    
+                    if (oldBlockType === 'half-vertical') {
+                        oldCells = [
+                            `${oldRow},${oldCol}`,
+                            `${oldRow + 1},${oldCol}`
+                        ];
+                    } else if (oldBlockType === 'half-horizontal') {
+                        oldCells = [
+                            `${oldRow},${oldCol}`,
+                            `${oldRow},${oldCol + 1}`
+                        ];
+                    } else {
+                        oldCells = [
+                            `${oldRow},${oldCol}`,
+                            `${oldRow},${oldCol + 1}`,
+                            `${oldRow + 1},${oldCol}`,
+                            `${oldRow + 1},${oldCol + 1}`
+                        ];
+                    }
+                    
                     const blockNum = parseInt(draggedBlock.dataset.number);
                     const bgColor = window.getComputedStyle(draggedBlock).backgroundColor;
                     for (const cellKey of oldCells) {
@@ -240,14 +297,42 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
     // If it's a blank block (0), keep it in supply
     if (blockNumber === 0) {
         const supplyArea = document.getElementById('supply-area');
+        const currentBlockType = draggedBlock.dataset.blockType || 'full';
         const hasBlankInSupply = Array.from(supplyArea.children).some(
-            child => child.dataset.number === '0'
+            child => child.dataset.number === '0' && 
+                     child.dataset.blockType === currentBlockType &&
+                     !child.classList.contains('on-grid')
         );
         
         if (!hasBlankInSupply) {
-            const newBlankBlock = createBlock(0);
+            const newBlankBlock = createBlock(0, currentBlockType);
             newBlankBlock.classList.add('blank');
-            supplyArea.appendChild(newBlankBlock);
+            if (currentBlockType === 'half-vertical') {
+                newBlankBlock.classList.add('half-vertical');
+            } else if (currentBlockType === 'half-horizontal') {
+                newBlankBlock.classList.add('half-horizontal');
+            }
+            
+            // Insert blank block in correct sorted position
+            const allBlocks = Array.from(supplyArea.children);
+            const blankBlocks = allBlocks.filter(b => b.dataset.number === '0');
+            const order = { 'full': 0, 'half-vertical': 1, 'half-horizontal': 2 };
+            
+            // Find the correct position to insert
+            let insertBefore = null;
+            for (const block of blankBlocks) {
+                const blockType = block.dataset.blockType || 'full';
+                if (order[blockType] > order[currentBlockType]) {
+                    insertBefore = block;
+                    break;
+                }
+            }
+            
+            if (insertBefore) {
+                supplyArea.insertBefore(newBlankBlock, insertBefore);
+            } else {
+                supplyArea.appendChild(newBlankBlock);
+            }
         }
     } else {
         // For numbered blocks, create a placeholder in supply if coming from supply
@@ -265,12 +350,13 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
 // Return block to supply
 function returnBlockToSupply() {
     const blockNumber = parseInt(draggedBlock.dataset.number);
+    const blockType = draggedBlock.dataset.blockType || 'full';
     
     // If it's a blank block on grid, just remove it
     if (blockNumber === 0 && draggedBlock.classList.contains('on-grid')) {
         const row = parseInt(draggedBlock.dataset.gridRow);
         const col = parseInt(draggedBlock.dataset.gridCol);
-        removeBlockFromGridState(row, col);
+        removeBlockFromGridState(row, col, blockType);
         draggedBlock.remove();
         return;
     }
@@ -279,7 +365,7 @@ function returnBlockToSupply() {
     if (draggedBlock.classList.contains('on-grid')) {
         const row = parseInt(draggedBlock.dataset.gridRow);
         const col = parseInt(draggedBlock.dataset.gridCol);
-        removeBlockFromGridState(row, col);
+        removeBlockFromGridState(row, col, blockType);
     }
     
     // Return numbered block to supply
@@ -319,13 +405,27 @@ function returnBlockToSupply() {
 }
 
 // Remove block from grid state
-function removeBlockFromGridState(row, col) {
-    const cells = [
-        `${row},${col}`,
-        `${row},${col + 1}`,
-        `${row + 1},${col}`,
-        `${row + 1},${col + 1}`
-    ];
+function removeBlockFromGridState(row, col, blockType = 'full') {
+    let cells = [];
+    
+    if (blockType === 'half-vertical') {
+        cells = [
+            `${row},${col}`,
+            `${row + 1},${col}`
+        ];
+    } else if (blockType === 'half-horizontal') {
+        cells = [
+            `${row},${col}`,
+            `${row},${col + 1}`
+        ];
+    } else {
+        cells = [
+            `${row},${col}`,
+            `${row},${col + 1}`,
+            `${row + 1},${col}`,
+            `${row + 1},${col + 1}`
+        ];
+    }
     
     for (const cellKey of cells) {
         delete gridState[cellKey];
@@ -340,8 +440,15 @@ function sortSupplyArea() {
     blocks.sort((a, b) => {
         const numA = parseInt(a.dataset.number);
         const numB = parseInt(b.dataset.number);
+        const typeA = a.dataset.blockType || 'full';
+        const typeB = b.dataset.blockType || 'full';
         
-        // Blank block (0) always goes last
+        // Blank blocks (0) always go last
+        if (numA === 0 && numB === 0) {
+            // Sort blank blocks: full, half-vertical, half-horizontal
+            const order = { 'full': 0, 'half-vertical': 1, 'half-horizontal': 2 };
+            return order[typeA] - order[typeB];
+        }
         if (numA === 0) return 1;
         if (numB === 0) return -1;
         
@@ -386,6 +493,7 @@ function captureScene() {
             const row = parseInt(block.dataset.gridRow);
             const col = parseInt(block.dataset.gridCol);
             const blockNumber = parseInt(block.dataset.number);
+            const blockType = block.dataset.blockType || 'full';
             const backgroundColor = block.style.backgroundColor || window.getComputedStyle(block).backgroundColor;
             const borderColor = block.style.borderColor || window.getComputedStyle(block).borderColor;
             const textColor = block.style.color || window.getComputedStyle(block).color;
@@ -394,6 +502,7 @@ function captureScene() {
                 row,
                 col,
                 number: blockNumber,
+                blockType: blockType,
                 bgColor: backgroundColor,
                 borderColor: borderColor,
                 textColor: textColor
@@ -435,14 +544,19 @@ function loadScene() {
         const supplyArea = document.getElementById('supply-area');
         
         blocks.forEach(blockData => {
-            const { row, col, number, bgColor, borderColor, textColor } = blockData;
+            const { row, col, number, blockType = 'full', bgColor, borderColor, textColor } = blockData;
             
             // Create or find block
             let block;
             
             if (number === 0) {
-                block = createBlock(0);
+                block = createBlock(0, blockType);
                 block.classList.add('blank');
+                if (blockType === 'half-vertical') {
+                    block.classList.add('half-vertical');
+                } else if (blockType === 'half-horizontal') {
+                    block.classList.add('half-horizontal');
+                }
             } else {
                 // Find existing block in supply area
                 block = Array.from(supplyArea.children).find(
@@ -451,7 +565,7 @@ function loadScene() {
                 );
                 
                 if (!block) {
-                    block = createBlock(number);
+                    block = createBlock(number, blockType);
                 }
             }
             
@@ -466,14 +580,28 @@ function loadScene() {
             block.style.color = textColor;
             block.dataset.gridRow = row;
             block.dataset.gridCol = col;
+            block.dataset.blockType = blockType;
             
-            // Update grid state
-            const cells = [
-                `${row},${col}`,
-                `${row},${col + 1}`,
-                `${row + 1},${col}`,
-                `${row + 1},${col + 1}`
-            ];
+            // Update grid state based on block type
+            let cells = [];
+            if (blockType === 'half-vertical') {
+                cells = [
+                    `${row},${col}`,
+                    `${row + 1},${col}`
+                ];
+            } else if (blockType === 'half-horizontal') {
+                cells = [
+                    `${row},${col}`,
+                    `${row},${col + 1}`
+                ];
+            } else {
+                cells = [
+                    `${row},${col}`,
+                    `${row},${col + 1}`,
+                    `${row + 1},${col}`,
+                    `${row + 1},${col + 1}`
+                ];
+            }
             
             for (const cellKey of cells) {
                 gridState[cellKey] = {
@@ -500,14 +628,43 @@ function loadScene() {
 // Clear grid
 function clearGrid() {
     const gridElement = document.getElementById('design-grid');
-    const blocksOnGrid = gridElement.querySelectorAll('.block');
+    const blocksOnGrid = Array.from(gridElement.querySelectorAll('.block'));
+    const supplyArea = document.getElementById('supply-area');
     
     blocksOnGrid.forEach(block => {
         const blockNumber = parseInt(block.dataset.number);
-        if (blockNumber !== 0) {
-            returnBlockToSupply();
+        const blockType = block.dataset.blockType || 'full';
+        
+        // Remove from grid state
+        if (block.classList.contains('on-grid')) {
+            const row = parseInt(block.dataset.gridRow);
+            const col = parseInt(block.dataset.gridCol);
+            removeBlockFromGridState(row, col, blockType);
         }
-        block.remove();
+        
+        // Return numbered blocks to supply
+        if (blockNumber !== 0) {
+            // Find and replace placeholder if it exists
+            const placeholder = Array.from(supplyArea.children).find(
+                child => child.classList.contains('placeholder') && 
+                         child.dataset.number === block.dataset.number
+            );
+            
+            if (placeholder) {
+                block.classList.remove('on-grid');
+                block.style.left = '';
+                block.style.top = '';
+                delete block.dataset.gridRow;
+                delete block.dataset.gridCol;
+                supplyArea.replaceChild(block, placeholder);
+                sortSupplyArea();
+            }
+        }
+        
+        // Remove blank blocks (they stay in supply)
+        if (blockNumber === 0) {
+            block.remove();
+        }
     });
     
     // Clear grid state
