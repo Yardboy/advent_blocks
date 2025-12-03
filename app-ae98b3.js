@@ -15,6 +15,7 @@ let draggedBlockOriginalParent = null;
 let draggedBlockOriginalPosition = null;
 let offsetX = 0;
 let offsetY = 0;
+let clickedQuadrant = { row: 0, col: 0 }; // Which quadrant within the block was clicked
 
 // Initialize the application
 function init() {
@@ -115,6 +116,31 @@ function handleDragStart(e) {
             };
         }
         
+        // Determine which quadrant was clicked within the block
+        const blockType = draggedBlock.dataset.blockType || 'full';
+        const blockWidth = rect.width;
+        const blockHeight = rect.height;
+        
+        if (blockType === 'full') {
+            // Full block is 2x2 cells
+            clickedQuadrant = {
+                col: offsetX < blockWidth / 2 ? 0 : 1,
+                row: offsetY < blockHeight / 2 ? 0 : 1
+            };
+        } else if (blockType === 'half-vertical') {
+            // Half-vertical is 1 cell wide, 2 cells tall
+            clickedQuadrant = {
+                col: 0,
+                row: offsetY < blockHeight / 2 ? 0 : 1
+            };
+        } else if (blockType === 'half-horizontal') {
+            // Half-horizontal is 2 cells wide, 1 cell tall
+            clickedQuadrant = {
+                col: offsetX < blockWidth / 2 ? 0 : 1,
+                row: 0
+            };
+        }
+        
         draggedBlock.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/html', draggedBlock.innerHTML);
@@ -162,9 +188,13 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
     const relativeX = cursorX - gridRect.left;
     const relativeY = cursorY - gridRect.top;
     
-    // Calculate grid cell where cursor is (this becomes top-left corner of block)
-    const col = Math.floor(relativeX / CELL_SIZE);
-    const row = Math.floor(relativeY / CELL_SIZE);
+    // Calculate grid cell where cursor is
+    const cursorCellCol = Math.floor(relativeX / CELL_SIZE);
+    const cursorCellRow = Math.floor(relativeY / CELL_SIZE);
+    
+    // Adjust for the quadrant that was clicked - the clicked quadrant should be at the cursor position
+    const col = cursorCellCol - clickedQuadrant.col;
+    const row = cursorCellRow - clickedQuadrant.row;
     
     // Get block type and determine cells it will occupy
     const blockType = draggedBlock.dataset.blockType || 'full';
@@ -173,7 +203,7 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
     // Check if block fits completely on grid based on its size
     if (blockType === 'half-vertical') {
         // 50px x 100px (1 cell wide, 2 cells tall)
-        if (col >= GRID_SIZE || row + 1 >= GRID_SIZE) {
+        if (col < 0 || col >= GRID_SIZE || row < 0 || row + 1 >= GRID_SIZE) {
             returnBlockToSupply();
             return;
         }
@@ -183,7 +213,7 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
         ];
     } else if (blockType === 'half-horizontal') {
         // 100px x 50px (2 cells wide, 1 cell tall)
-        if (col + 1 >= GRID_SIZE || row >= GRID_SIZE) {
+        if (col < 0 || col + 1 >= GRID_SIZE || row < 0 || row >= GRID_SIZE) {
             returnBlockToSupply();
             return;
         }
@@ -193,7 +223,7 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
         ];
     } else {
         // Full size: 100px x 100px (2x2 cells)
-        if (col + 1 >= GRID_SIZE || row + 1 >= GRID_SIZE) {
+        if (col < 0 || col + 1 >= GRID_SIZE || row < 0 || row + 1 >= GRID_SIZE) {
             returnBlockToSupply();
             return;
         }
@@ -495,17 +525,16 @@ function captureScene() {
             const blockNumber = parseInt(block.dataset.number);
             const blockType = block.dataset.blockType || 'full';
             const backgroundColor = block.style.backgroundColor || window.getComputedStyle(block).backgroundColor;
-            const borderColor = block.style.borderColor || window.getComputedStyle(block).borderColor;
-            const textColor = block.style.color || window.getComputedStyle(block).color;
+            
+            // Convert background color to color name
+            const colorName = getColorNameFromRgb(backgroundColor);
             
             blocks.push({
                 row,
                 col,
                 number: blockNumber,
                 blockType: blockType,
-                bgColor: backgroundColor,
-                borderColor: borderColor,
-                textColor: textColor
+                color: colorName
             });
         });
         
@@ -544,7 +573,20 @@ function loadScene() {
         const supplyArea = document.getElementById('supply-area');
         
         blocks.forEach(blockData => {
-            const { row, col, number, blockType = 'full', bgColor, borderColor, textColor } = blockData;
+            const { row, col, number, blockType = 'full', color, bgColor, borderColor, textColor } = blockData;
+            
+            // Get color object - support both new format (color name) and old format (RGB values)
+            let colorObj;
+            if (color) {
+                // New format: color name
+                colorObj = getColorFromName(color);
+            } else if (bgColor) {
+                // Old format: RGB values - convert to color name first
+                colorObj = getColorFromName(getColorNameFromRgb(bgColor));
+            } else {
+                // Fallback to default
+                colorObj = COLOR_OPTIONS[1]; // Green
+            }
             
             // Create or find block
             let block;
@@ -575,9 +617,9 @@ function loadScene() {
             block.classList.add('on-grid');
             block.style.left = `${col * CELL_SIZE}px`;
             block.style.top = `${row * CELL_SIZE}px`;
-            block.style.backgroundColor = bgColor;
-            block.style.borderColor = borderColor;
-            block.style.color = textColor;
+            block.style.backgroundColor = colorObj.bg;
+            block.style.borderColor = colorObj.border;
+            block.style.color = colorObj.textColor;
             block.dataset.gridRow = row;
             block.dataset.gridCol = col;
             block.dataset.blockType = blockType;
@@ -606,7 +648,7 @@ function loadScene() {
             for (const cellKey of cells) {
                 gridState[cellKey] = {
                     blockNumber: number,
-                    backgroundColor: bgColor
+                    backgroundColor: colorObj.bg
                 };
             }
             
@@ -675,17 +717,44 @@ function clearGrid() {
 
 // Color options with their properties
 const COLOR_OPTIONS = [
-    { name: 'Red', bg: '#f44336', border: '#c62828', textColor: 'white' },
-    { name: 'Green', bg: '#4caf50', border: '#14532d', textColor: 'white' },
-    { name: 'Blue', bg: '#2196f3', border: '#0d47a1', textColor: 'white' },
-    { name: 'White', bg: '#ffffff', border: '#999999', textColor: 'black' },
-    { name: 'Gold', bg: '#ffc107', border: '#b8860b', textColor: 'black' },
-    { name: 'Silver', bg: '#c0c0c0', border: '#808080', textColor: 'black' },
-    { name: 'Brown', bg: '#795548', border: '#3e2723', textColor: 'white' },
-    { name: 'Yellow', bg: '#ffee58', border: '#b8860b', textColor: 'black' }
+    { name: 'Red', bg: '#c92d22', border: '#8b1e15', textColor: '#8b1e15' },
+    { name: 'Green', bg: '#4caf50', border: '#14532d', textColor: '#14532d' },
+    { name: 'Blue', bg: '#2196f3', border: '#0d47a1', textColor: '#0d47a1' },
+    { name: 'White', bg: '#ffffff', border: '#999999', textColor: '#999999' },
+    { name: 'Gold', bg: '#ffc107', border: '#b8860b', textColor: '#b8860b' },
+    { name: 'Silver', bg: '#c0c0c0', border: '#808080', textColor: '#808080' },
+    { name: 'Brown', bg: '#795548', border: '#3e2723', textColor: '#3e2723' },
+    { name: 'Yellow', bg: '#ffee58', border: '#b8860b', textColor: '#b8860b' }
 ];
 
 let currentContextBlock = null;
+
+// Helper function to convert RGB to hex
+function rgbToHex(rgb) {
+    const result = rgb.match(/\d+/g);
+    if (!result) return rgb;
+    const r = parseInt(result[0]);
+    const g = parseInt(result[1]);
+    const b = parseInt(result[2]);
+    return '#' + [r, g, b].map(x => {
+        const hex = x.toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+    }).join('');
+}
+
+// Helper function to get color name from RGB background color
+function getColorNameFromRgb(bgColor) {
+    const hexColor = bgColor.startsWith('#') ? bgColor.toLowerCase() : rgbToHex(bgColor).toLowerCase();
+    
+    const colorOption = COLOR_OPTIONS.find(option => option.bg.toLowerCase() === hexColor);
+    return colorOption ? colorOption.name : 'Green'; // Default to Green if not found
+}
+
+// Helper function to get color object from name
+function getColorFromName(colorName) {
+    const colorOption = COLOR_OPTIONS.find(option => option.name === colorName);
+    return colorOption || COLOR_OPTIONS[1]; // Default to Green if not found
+}
 
 // Handle block double-click
 function handleBlockDoubleClick(e) {
