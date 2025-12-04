@@ -5,17 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advent Blocks</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="styles-ae98b3.css">
+    <link rel="stylesheet" href="styles-f4c7d2.css">
 </head>
-<body class="bg-gray-100 p-4">
-    <div class="flex gap-4 h-screen">
-        <!-- Design Grid (2/3 width) -->
-        <div class="w-2/3 flex items-start justify-center">
+<body class="bg-gray-100 overflow-hidden">
+    <div class="flex gap-4 h-screen p-4">
+        <!-- Design Grid (1/2 width) -->
+        <div class="w-1/2 flex items-start justify-center">
             <div id="design-grid" class="grid-container"></div>
         </div>
 
-        <!-- Supply Area (1/3 width) -->
-        <div class="w-1/3 flex flex-col gap-4">
+        <!-- Supply Area (1/2 width) -->
+        <div class="w-1/2 flex flex-col gap-4">
             <div id="supply-area" class="flex flex-wrap justify-center gap-2 p-4 bg-white rounded shadow">
                 <!-- Numbered blocks 1-24 -->
                 <!-- Blank block -->
@@ -38,13 +38,10 @@
                 class="w-full h-32 p-2 border border-gray-300 rounded resize-none"
                 placeholder="Paste your design data here..."></textarea>
             
-            <div id="design-errors" class="hidden">
-                <div class="font-semibold text-sm mb-2">Design Errors:</div>
-                <ul id="error-list" class="list-disc list-inside text-sm"></ul>
-            </div>
+            <div id="block-stats" class="bg-white border border-gray-300 rounded p-3 text-sm"></div>
         </div>
     </div>
 
-    <script src="app-ae98b3.js"></script>
+    <script src="app-f4c7d2.js"></script>
 </body>
 </html>

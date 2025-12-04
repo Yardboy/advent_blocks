@@ -1,8 +1,8 @@
 /* Grid Container */
 .grid-container {
     display: grid;
-    grid-template-columns: repeat(18, 50px);
-    grid-template-rows: repeat(18, 50px);
+    grid-template-columns: repeat(18, 40px);
+    grid-template-rows: repeat(18, 40px);
     border: 1px solid black;
     border-collapse: collapse;
     background-color: white;
@@ -11,8 +11,8 @@
 
 /* Individual Grid Cells */
 .grid-cell {
-    width: 50px;
-    height: 50px;
+    width: 40px;
+    height: 40px;
     border: 1px solid #d3d3d3;
     box-sizing: border-box;
     position: relative;
@@ -66,16 +66,16 @@
 
 /* Blocks */
 .block {
-    width: 100px;
-    height: 100px;
+    width: 80px;
+    height: 80px;
     background-color: #4caf50;
     color: #14532d;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 72px;
+    font-size: 57px;
     font-weight: bold;
-    line-height: 90px;
+    line-height: 72px;
     cursor: grab;
     user-select: none;
     position: relative;
@@ -84,16 +84,16 @@
     box-sizing: border-box;
 }
 
-/* Half-size vertical block (50px x 100px) */
+/* Half-size vertical block (40px x 80px) */
 .block.half-vertical {
-    width: 50px;
-    height: 100px;
+    width: 40px;
+    height: 80px;
 }
 
-/* Half-size horizontal block (100px x 50px) */
+/* Half-size horizontal block (80px x 40px) */
 .block.half-horizontal {
-    width: 100px;
-    height: 50px;
+    width: 80px;
+    height: 40px;
 }
 
 .block:active {
@@ -174,40 +174,15 @@
     border-radius: 1px;
 }
 
-/* Design Errors */
-#design-errors {
-    background-color: white;
-    border: 1px solid #dc2626;
-    border-radius: 4px;
-    padding: 12px;
-}
-
-#design-errors .font-semibold {
-    color: #991b1b;
-}
-
-#error-list {
-    color: #991b1b;
-}
-
-#error-list li {
-    margin-left: 20px;
-}
-
-/* Error cell highlighting */
-.error-cell {
-    background-color: #fca5a5 !important;
-}
-
 /* Supply Area Grid Layout */
 #supply-area {
     display: grid !important;
-    grid-template-columns: repeat(6, 100px);
+    grid-template-columns: repeat(6, 80px);
     grid-template-rows: repeat(5, auto);
     gap: 0.5rem;
     justify-content: center;
     width: 100%;
-    min-width: 660px;
+    min-width: 544px;
 }
 
 /* Position blank blocks on row 5, centered */
