@@ -64,6 +64,30 @@
     border-left: 1px solid black;
 }
 
+/* Bottom borders black for cells above 2x2 group borders (rows 2, 4, 6, 8, 10, 12, 14, 16) */
+.grid-cell:nth-child(n+19):nth-child(-n+36),
+.grid-cell:nth-child(n+55):nth-child(-n+72),
+.grid-cell:nth-child(n+91):nth-child(-n+108),
+.grid-cell:nth-child(n+127):nth-child(-n+144),
+.grid-cell:nth-child(n+163):nth-child(-n+180),
+.grid-cell:nth-child(n+199):nth-child(-n+216),
+.grid-cell:nth-child(n+235):nth-child(-n+252),
+.grid-cell:nth-child(n+271):nth-child(-n+288) {
+    border-bottom: 1px solid black;
+}
+
+/* Right borders black for cells to the left of vertical 2x2 group borders (cols 2, 4, 6, 8, 10, 12, 14, 16) */
+.grid-cell:nth-child(18n+2),
+.grid-cell:nth-child(18n+4),
+.grid-cell:nth-child(18n+6),
+.grid-cell:nth-child(18n+8),
+.grid-cell:nth-child(18n+10),
+.grid-cell:nth-child(18n+12),
+.grid-cell:nth-child(18n+14),
+.grid-cell:nth-child(18n+16) {
+    border-right: 1px solid black;
+}
+
 /* Blocks */
 .block {
     width: 80px;
