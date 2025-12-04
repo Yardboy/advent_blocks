@@ -2,8 +2,8 @@
 
 ## Project Structure
 - **index.html**: Main HTML with Tailwind CSS CDN, no build step required
-- **app-f4c7d2.js**: Vanilla JavaScript for drag-and-drop logic, state management (note: hash suffix in filename)
-- **styles-f4c7d2.css**: Custom CSS for grid borders, blocks, and layout specifics not covered by Tailwind (note: hash suffix in filename)
+- **app-9a3e51.js**: Vanilla JavaScript for drag-and-drop logic, state management (note: hash suffix in filename)
+- **styles-9a3e51.css**: Custom CSS for grid borders, blocks, and layout specifics not covered by Tailwind (note: hash suffix in filename)
 
 ## Build/Test Commands
 - **Run**: Open `index.html` in browser (no build system)

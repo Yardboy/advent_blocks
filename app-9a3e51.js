@@ -719,7 +719,7 @@ function clearGrid() {
 
 // Color options with their properties
 const COLOR_OPTIONS = [
-    { name: 'Red', bg: '#c92d22', border: '#8b1e15', textColor: '#8b1e15' },
+    { name: 'Red', bg: '#c92d22', border: '#5a0f0a', textColor: '#5a0f0a' },
     { name: 'Green', bg: '#4caf50', border: '#14532d', textColor: '#14532d' },
     { name: 'Blue', bg: '#2196f3', border: '#0d47a1', textColor: '#0d47a1' },
     { name: 'White', bg: '#ffffff', border: '#999999', textColor: '#999999' },
