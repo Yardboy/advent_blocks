@@ -1,11 +1,11 @@
 // Constants
 const GRID_SIZE = 18;
-const CELL_SIZE = 50;
-const BLOCK_SIZE = 100;
-const HALF_BLOCK_VERTICAL_WIDTH = 50;
-const HALF_BLOCK_VERTICAL_HEIGHT = 100;
-const HALF_BLOCK_HORIZONTAL_WIDTH = 100;
-const HALF_BLOCK_HORIZONTAL_HEIGHT = 50;
+const CELL_SIZE = 40;
+const BLOCK_SIZE = 80;
+const HALF_BLOCK_VERTICAL_WIDTH = 40;
+const HALF_BLOCK_VERTICAL_HEIGHT = 80;
+const HALF_BLOCK_HORIZONTAL_WIDTH = 80;
+const HALF_BLOCK_HORIZONTAL_HEIGHT = 40;
 const NUM_BLOCKS = 24;
 
 // State management
@@ -295,7 +295,7 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
                 } else {
                     returnBlockToSupply();
                 }
-                validateDesign();
+                updateBlockStats();
                 return;
             }
         }
@@ -373,8 +373,8 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
         }
     }
     
-    // Validate design after placing block
-    validateDesign();
+    // Update block stats after placing block
+    updateBlockStats();
 }
 
 // Return block to supply
@@ -388,6 +388,7 @@ function returnBlockToSupply() {
         const col = parseInt(draggedBlock.dataset.gridCol);
         removeBlockFromGridState(row, col, blockType);
         draggedBlock.remove();
+        updateBlockStats();
         return;
     }
     
@@ -430,8 +431,8 @@ function returnBlockToSupply() {
         }
     }
     
-    // Validate design after returning block
-    validateDesign();
+    // Update block stats after returning block
+    updateBlockStats();
 }
 
 // Remove block from grid state
@@ -660,6 +661,7 @@ function loadScene() {
             }
         });
         
+        updateBlockStats();
         alert('Scene loaded successfully!');
     } catch (error) {
         console.error('Error in loadScene:', error);
@@ -851,97 +853,72 @@ function changeBlockColor(color) {
             }
         }
         
+        // Update block stats if block is on grid
+        if (currentContextBlock.classList.contains('on-grid')) {
+            updateBlockStats();
+        }
+        
         currentContextBlock = null;
     } catch (error) {
         console.error('Error in changeBlockColor:', error);
     }
 }
 
-// Validate design and check for errors
-function validateDesign() {
-    const errors = new Set();
-    const errorCells = new Set();
+// Update block statistics
+function updateBlockStats() {
     const gridElement = document.getElementById('design-grid');
     const blocksOnGrid = Array.from(gridElement.querySelectorAll('.block'));
-    
-    // Clear all existing error cell highlights
-    const allCells = gridElement.querySelectorAll('.grid-cell');
-    allCells.forEach(cell => cell.classList.remove('error-cell'));
+    const statsElement = document.getElementById('block-stats');
     
     if (blocksOnGrid.length === 0) {
-        displayErrors([]);
+        statsElement.innerHTML = '';
         return;
     }
     
-    // Check for contiguity - all blocks should touch at least one other block
-    if (blocksOnGrid.length > 1) {
-        // For each block, check if all its border cells are empty
-        for (const block of blocksOnGrid) {
-            const row = parseInt(block.dataset.gridRow);
-            const col = parseInt(block.dataset.gridCol);
-            
-            // Define the 8 border cells around this 2x2 block
-            // Top row (above the block)
-            // Left column (to the left)
-            // Right column (to the right)
-            // Bottom row (below the block)
-            const borderCells = [
-                // Top edge (2 cells above)
-                `${row - 1},${col}`,
-                `${row - 1},${col + 1}`,
-                // Bottom edge (2 cells below)
-                `${row + 2},${col}`,
-                `${row + 2},${col + 1}`,
-                // Left edge (2 cells to the left)
-                `${row},${col - 1}`,
-                `${row + 1},${col - 1}`,
-                // Right edge (2 cells to the right)
-                `${row},${col + 2}`,
-                `${row + 1},${col + 2}`
-            ];
-            
-            // Check if any border cell is occupied
-            let hasNeighbor = false;
-            for (const cellKey of borderCells) {
-                if (gridState[cellKey]) {
-                    hasNeighbor = true;
-                    break;
-                }
-            }
-            
-            // If all border cells are empty, this block is isolated
-            if (!hasNeighbor) {
-                errors.add('Design has non-contiguous blocks');
-                break; // Only need to report the error once
-            }
-        }
-    }
+    // Count by color-type combination
+    const colorTypeCounts = {};
     
-    // Apply error cell highlighting
-    errorCells.forEach(cellKey => {
-        const [row, col] = cellKey.split(',').map(Number);
-        const cellIndex = row * GRID_SIZE + col;
-        const cell = allCells[cellIndex];
-        if (cell) {
-            cell.classList.add('error-cell');
+    blocksOnGrid.forEach(block => {
+        const blockNumber = parseInt(block.dataset.number);
+        const blockType = block.dataset.blockType || 'full';
+        const backgroundColor = block.style.backgroundColor || window.getComputedStyle(block).backgroundColor;
+        
+        // Get color name
+        const colorName = getColorNameFromRgb(backgroundColor);
+        
+        // Determine type label
+        let typeLabel;
+        if (blockNumber === 0) {
+            if (blockType === 'half-vertical') {
+                typeLabel = 'Half-Vertical Blank';
+            } else if (blockType === 'half-horizontal') {
+                typeLabel = 'Half-Horizontal Blank';
+            } else {
+                typeLabel = 'Full Blank';
+            }
+        } else {
+            typeLabel = 'Numbered';
         }
+        
+        // Create color-type key
+        const key = `${colorName}-${typeLabel}`;
+        colorTypeCounts[key] = (colorTypeCounts[key] || 0) + 1;
     });
     
-    displayErrors(Array.from(errors));
-}
-
-// Display design errors
-function displayErrors(errors) {
-    const errorSection = document.getElementById('design-errors');
-    const errorList = document.getElementById('error-list');
+    // Build stats display
+    const stats = Object.entries(colorTypeCounts)
+        .sort((a, b) => b[1] - a[1]) // Sort by count descending
+        .map(([key, count]) => {
+            const [color, ...typeParts] = key.split('-');
+            const type = typeParts.join('-');
+            const colorObj = getColorFromName(color);
+            return `<span class="inline-flex items-center gap-1">
+                <span class="inline-block w-4 h-4 border" style="background-color: ${colorObj.bg}; border-color: ${colorObj.border};"></span>
+                <span>${color}-${type}: ${count}</span>
+            </span>`;
+        });
     
-    if (errors.length === 0) {
-        errorSection.classList.add('hidden');
-        errorList.innerHTML = '';
-    } else {
-        errorSection.classList.remove('hidden');
-        errorList.innerHTML = errors.map(error => `<li>${error}</li>`).join('');
-    }
+    statsElement.innerHTML = stats.join(', ');
 }
 
 // Initialize on page load
