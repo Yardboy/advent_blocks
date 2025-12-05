@@ -1131,7 +1131,205 @@ function updateBlockStats() {
             </span>`;
         });
     
+    // Calculate and display clips
+    const clipCount = updateClips();
+    
+    // Add clip count to stats (doubled because each clip position needs 2 physical clips)
+    if (clipCount > 0) {
+        stats.push(`<span class="inline-flex items-center gap-1">
+            <span class="inline-block w-4 h-4 bg-black border border-gray-400"></span>
+            <span>Clips: ${clipCount * 2}</span>
+        </span>`);
+    }
+    
     statsElement.innerHTML = stats.join(', ');
+}
+
+// Calculate and display clips between blocks
+function updateClips() {
+    const gridElement = document.getElementById('design-grid');
+    
+    // Remove existing clips
+    const existingClips = gridElement.querySelectorAll('.clip');
+    existingClips.forEach(clip => clip.remove());
+    
+    // Get all blocks on grid
+    const blocksOnGrid = Array.from(gridElement.querySelectorAll('.block'));
+    if (blocksOnGrid.length === 0) return 0;
+    
+    // Build a map of which cells are occupied by which blocks
+    const cellToBlockMap = new Map();
+    blocksOnGrid.forEach((block, index) => {
+        const row = parseInt(block.dataset.gridRow);
+        const col = parseInt(block.dataset.gridCol);
+        const type = block.dataset.blockType || 'full';
+        const cells = getCellsForBlock(row, col, type);
+        
+        cells.forEach(cellKey => {
+            cellToBlockMap.set(cellKey, { block, index, row, col, type });
+        });
+    });
+    
+    // Track potential borders and their cell pairs
+    const horizontalBorders = new Map(); // Key: "row,col" (border position), Value: array of [leftBlockIndex, rightBlockIndex]
+    const verticalBorders = new Map(); // Key: "row,col" (border position), Value: array of [topBlockIndex, bottomBlockIndex]
+    
+    // For each cell, check if there's an adjacent cell with a different block
+    for (const [cellKey, blockInfo] of cellToBlockMap.entries()) {
+        const [cellRow, cellCol] = cellKey.split(',').map(Number);
+        
+        // Check right neighbor (horizontal border)
+        const rightKey = `${cellRow},${cellCol + 1}`;
+        if (cellToBlockMap.has(rightKey)) {
+            const rightBlock = cellToBlockMap.get(rightKey);
+            if (rightBlock.index !== blockInfo.index) {
+                // Different blocks touching - record this border segment
+                const borderKey = `${cellRow},${cellCol + 1}`;
+                if (!horizontalBorders.has(borderKey)) {
+                    horizontalBorders.set(borderKey, []);
+                }
+                horizontalBorders.get(borderKey).push([blockInfo.index, rightBlock.index]);
+            }
+        }
+        
+        // Check bottom neighbor (vertical border)
+        const bottomKey = `${cellRow + 1},${cellCol}`;
+        if (cellToBlockMap.has(bottomKey)) {
+            const bottomBlock = cellToBlockMap.get(bottomKey);
+            if (bottomBlock.index !== blockInfo.index) {
+                // Different blocks touching - record this border segment
+                const borderKey = `${cellRow + 1},${cellCol}`;
+                if (!verticalBorders.has(borderKey)) {
+                    verticalBorders.set(borderKey, []);
+                }
+                verticalBorders.get(borderKey).push([blockInfo.index, bottomBlock.index]);
+            }
+        }
+    }
+    
+    // Track clip positions to avoid duplicates
+    const clipPositions = new Set();
+    
+    // Check for three-block meeting points where blocks share half-borders
+    // A clip at an intersection requires that 3 blocks meet AND share edges (not just corners)
+    const intersectionPoints = new Map(); // Key: "row,col", Value: Set of block indices
+    
+    for (const [cellKey, blockInfo] of cellToBlockMap.entries()) {
+        const [cellRow, cellCol] = cellKey.split(',').map(Number);
+        
+        // Each cell contributes to 4 intersection points (its corners)
+        const corners = [
+            `${cellRow},${cellCol}`,         // Top-left
+            `${cellRow},${cellCol + 1}`,     // Top-right
+            `${cellRow + 1},${cellCol}`,     // Bottom-left
+            `${cellRow + 1},${cellCol + 1}`  // Bottom-right
+        ];
+        
+        corners.forEach(corner => {
+            if (!intersectionPoints.has(corner)) {
+                intersectionPoints.set(corner, new Set());
+            }
+            intersectionPoints.get(corner).add(blockInfo.index);
+        });
+    }
+    
+    // Add clips where exactly 3 blocks meet at an intersection AND they share edges
+    for (const [intersection, blockIndices] of intersectionPoints.entries()) {
+        if (blockIndices.size === 3) {
+            const [clipRow, clipCol] = intersection.split(',').map(Number);
+            
+            // Check the 4 cells around this intersection to verify edge sharing
+            // For a valid 3-block meeting, we need a T-junction pattern
+            const topLeft = cellToBlockMap.get(`${clipRow - 1},${clipCol - 1}`);
+            const topRight = cellToBlockMap.get(`${clipRow - 1},${clipCol}`);
+            const bottomLeft = cellToBlockMap.get(`${clipRow},${clipCol - 1}`);
+            const bottomRight = cellToBlockMap.get(`${clipRow},${clipCol}`);
+            
+            const quadrants = [topLeft, topRight, bottomLeft, bottomRight].map(b => b ? b.index : null);
+            
+            // Count how many quadrants each block occupies
+            const blockQuadrantCount = new Map();
+            quadrants.forEach(idx => {
+                if (idx !== null) {
+                    blockQuadrantCount.set(idx, (blockQuadrantCount.get(idx) || 0) + 1);
+                }
+            });
+            
+            // Valid T-junction: one block has 2 quadrants (the stem), two blocks have 1 each (the top)
+            const counts = Array.from(blockQuadrantCount.values()).sort((a, b) => b - a);
+            if (counts.length === 3 && counts[0] === 2 && counts[1] === 1 && counts[2] === 1) {
+                // This is a valid T-junction
+                clipPositions.add(`${clipRow},${clipCol}`);
+            }
+        }
+    }
+    
+    // Process horizontal borders - check if they form complete borders
+    for (const [borderKey, pairs] of horizontalBorders.entries()) {
+        const [borderRow, borderCol] = borderKey.split(',').map(Number);
+        
+        // Check if there's a matching segment above (to form a complete 2-cell high border)
+        const aboveBorderKey = `${borderRow - 1},${borderCol}`;
+        if (horizontalBorders.has(aboveBorderKey)) {
+            const abovePairs = horizontalBorders.get(aboveBorderKey);
+            // Check if same blocks share both segments
+            for (const [left1, right1] of pairs) {
+                for (const [left2, right2] of abovePairs) {
+                    if ((left1 === left2 && right1 === right2) || (left1 === right2 && right1 === left2)) {
+                        // Complete border found - add clip at center
+                        // Vertical border line is at column borderCol, spanning 2 cells vertically
+                        // Center is at the intersection point between the two cells
+                        const clipRow = borderRow - 1 + 1; // = borderRow (the intersection)
+                        const clipCol = borderCol;
+                        clipPositions.add(`${clipRow},${clipCol}`);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Process vertical borders - check if they form complete borders
+    for (const [borderKey, pairs] of verticalBorders.entries()) {
+        const [borderRow, borderCol] = borderKey.split(',').map(Number);
+        
+        // Check if there's a matching segment to the left (to form a complete 2-cell wide border)
+        const leftBorderKey = `${borderRow},${borderCol - 1}`;
+        if (verticalBorders.has(leftBorderKey)) {
+            const leftPairs = verticalBorders.get(leftBorderKey);
+            // Check if same blocks share both segments
+            for (const [top1, bottom1] of pairs) {
+                for (const [top2, bottom2] of leftPairs) {
+                    if ((top1 === top2 && bottom1 === bottom2) || (top1 === bottom2 && bottom1 === top2)) {
+                        // Complete border found - add clip at center
+                        // Horizontal border line is at row borderRow, spanning 2 cells horizontally
+                        // Center is at the intersection point between the two cells
+                        const clipRow = borderRow;
+                        const clipCol = borderCol - 1 + 1; // = borderCol (the intersection)
+                        clipPositions.add(`${clipRow},${clipCol}`);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Create clip elements
+    clipPositions.forEach(posStr => {
+        const [clipRow, clipCol] = posStr.split(',').map(Number);
+        const clip = document.createElement('div');
+        clip.className = 'clip';
+        clip.style.position = 'absolute';
+        clip.style.width = '10px';
+        clip.style.height = '10px';
+        clip.style.backgroundColor = 'black';
+        // Position at center of border (using 0.5 offsets)
+        clip.style.left = `${clipCol * CELL_SIZE - 5}px`;
+        clip.style.top = `${clipRow * CELL_SIZE - 5}px`;
+        clip.style.zIndex = '100';
+        clip.style.pointerEvents = 'none';
+        gridElement.appendChild(clip);
+    });
+    
+    return clipPositions.size;
 }
 
 // Initialize on page load
