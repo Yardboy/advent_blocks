@@ -8,6 +8,18 @@ const HALF_BLOCK_HORIZONTAL_WIDTH = 80;
 const HALF_BLOCK_HORIZONTAL_HEIGHT = 40;
 const NUM_BLOCKS = 24;
 
+// Color options with their properties
+const COLOR_OPTIONS = [
+    { name: 'Red', bg: '#c92d22', border: '#5a0f0a', textColor: '#5a0f0a' },
+    { name: 'Green', bg: '#4caf50', border: '#14532d', textColor: '#14532d' },
+    { name: 'Blue', bg: '#2196f3', border: '#0d47a1', textColor: '#0d47a1' },
+    { name: 'White', bg: '#ffffff', border: '#999999', textColor: '#999999' },
+    { name: 'Gold', bg: '#ffc107', border: '#b8860b', textColor: '#b8860b' },
+    { name: 'Silver', bg: '#c0c0c0', border: '#808080', textColor: '#808080' },
+    { name: 'Brown', bg: '#795548', border: '#3e2723', textColor: '#3e2723' },
+    { name: 'Yellow', bg: '#ffee58', border: '#b8860b', textColor: '#b8860b' }
+];
+
 // State management
 const gridState = {};
 let draggedBlock = null;
@@ -16,12 +28,15 @@ let draggedBlockOriginalPosition = null;
 let offsetX = 0;
 let offsetY = 0;
 let clickedQuadrant = { row: 0, col: 0 }; // Which quadrant within the block was clicked
+let currentContextBlock = null;
 
 // Initialize the application
 function init() {
     createGrid();
     createSupplyBlocks();
+    createColorButtons();
     setupEventListeners();
+    updateBlockStats();
 }
 
 // Create the 50x50 grid
@@ -39,30 +54,36 @@ function createGrid() {
     }
 }
 
+// Helper to get the blocks container within supply area
+function getSupplyBlocksContainer() {
+    const supplyArea = document.getElementById('supply-area');
+    return supplyArea.querySelector('.flex-wrap') || supplyArea;
+}
+
 // Create supply blocks (1-24 and blank)
 function createSupplyBlocks() {
-    const supplyArea = document.getElementById('supply-area');
+    const blocksContainer = getSupplyBlocksContainer();
     
     // Create numbered blocks 1-24
     for (let i = 1; i <= NUM_BLOCKS; i++) {
         const block = createBlock(i);
-        supplyArea.appendChild(block);
+        blocksContainer.appendChild(block);
     }
     
     // Create blank block (full size)
     const blankBlock = createBlock(0);
     blankBlock.classList.add('blank');
-    supplyArea.appendChild(blankBlock);
+    blocksContainer.appendChild(blankBlock);
     
     // Create half-size vertical blank block (50px x 100px)
     const halfVerticalBlock = createBlock(0, 'half-vertical');
     halfVerticalBlock.classList.add('blank', 'half-vertical');
-    supplyArea.appendChild(halfVerticalBlock);
+    blocksContainer.appendChild(halfVerticalBlock);
     
     // Create half-size horizontal blank block (100px x 50px)
     const halfHorizontalBlock = createBlock(0, 'half-horizontal');
     halfHorizontalBlock.classList.add('blank', 'half-horizontal');
-    supplyArea.appendChild(halfHorizontalBlock);
+    blocksContainer.appendChild(halfHorizontalBlock);
 }
 
 // Create a single block element
@@ -85,6 +106,34 @@ function createBlock(number, blockType = 'full') {
     block.addEventListener('dblclick', handleBlockDoubleClick);
     
     return block;
+}
+
+// Create color buttons
+function createColorButtons() {
+    const colorButtonsContainer = document.getElementById('color-buttons');
+    
+    COLOR_OPTIONS.forEach(color => {
+        const button = document.createElement('button');
+        button.className = 'w-8 h-8 rounded border-2 hover:scale-110 transition-transform';
+        button.style.backgroundColor = color.bg;
+        button.style.borderColor = color.border;
+        button.setAttribute('data-tooltip', `Make all remaining blocks ${color.name}`);
+        button.addEventListener('click', () => makeAllBlocksColor(color));
+        colorButtonsContainer.appendChild(button);
+    });
+}
+
+// Make all blocks in supply a specific color
+function makeAllBlocksColor(color) {
+    const blocksContainer = getSupplyBlocksContainer();
+    // Only change blocks that are in supply (not on grid)
+    const allBlocks = blocksContainer.querySelectorAll('.block:not(.placeholder):not(.on-grid)');
+    
+    allBlocks.forEach(block => {
+        block.style.backgroundColor = color.bg;
+        block.style.borderColor = color.border;
+        block.style.color = color.textColor;
+    });
 }
 
 // Create a placeholder for a numbered block
@@ -247,59 +296,76 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
     const draggedBlockNumber = parseInt(draggedBlock.dataset.number);
     const isMovingExistingBlock = draggedBlock.classList.contains('on-grid') && draggedBlockOriginalPosition;
     
-    for (const cellKey of cells) {
-        if (gridState[cellKey]) {
-            // Allow if this is the same block being moved (not blank blocks, which can have multiple instances)
-            const isSameBlock = isMovingExistingBlock && 
-                               gridState[cellKey].blockNumber === draggedBlockNumber &&
-                               draggedBlockNumber !== 0;
-            
-            if (!isSameBlock) {
-                // Cell occupied by another block, return to original position or supply
-                if (draggedBlockOriginalPosition) {
-                    draggedBlock.style.left = draggedBlockOriginalPosition.left;
-                    draggedBlock.style.top = draggedBlockOriginalPosition.top;
-                    // Re-add to grid state since we removed it earlier
-                    const oldRow = parseInt(draggedBlock.dataset.gridRow);
-                    const oldCol = parseInt(draggedBlock.dataset.gridCol);
-                    const oldBlockType = draggedBlock.dataset.blockType || 'full';
-                    let oldCells = [];
-                    
-                    if (oldBlockType === 'half-vertical') {
-                        oldCells = [
-                            `${oldRow},${oldCol}`,
-                            `${oldRow + 1},${oldCol}`
-                        ];
-                    } else if (oldBlockType === 'half-horizontal') {
-                        oldCells = [
-                            `${oldRow},${oldCol}`,
-                            `${oldRow},${oldCol + 1}`
-                        ];
-                    } else {
-                        oldCells = [
-                            `${oldRow},${oldCol}`,
-                            `${oldRow},${oldCol + 1}`,
-                            `${oldRow + 1},${oldCol}`,
-                            `${oldRow + 1},${oldCol + 1}`
-                        ];
-                    }
-                    
-                    const blockNum = parseInt(draggedBlock.dataset.number);
-                    const bgColor = window.getComputedStyle(draggedBlock).backgroundColor;
-                    for (const cellKey of oldCells) {
-                        gridState[cellKey] = {
-                            blockNumber: blockNum,
-                            backgroundColor: bgColor
-                        };
-                    }
-                } else {
-                    returnBlockToSupply();
-                }
-                updateBlockStats();
-                return;
+    // Check if initial position is valid
+    let finalRow = row;
+    let finalCol = col;
+    let positionFound = isPositionValid(row, col, blockType, draggedBlockNumber, isMovingExistingBlock);
+    
+    // If initial position is blocked, try neighboring positions
+    if (!positionFound) {
+        // Determine cursor position relative to the intended block position
+        // Calculate the center of the intended block position
+        let blockCenterRow, blockCenterCol;
+        
+        if (blockType === 'half-vertical') {
+            // 1 cell wide, 2 cells tall
+            blockCenterRow = row + 1; // Between row and row+1
+            blockCenterCol = col + 0.5; // Middle of single column
+        } else if (blockType === 'half-horizontal') {
+            // 2 cells wide, 1 cell tall
+            blockCenterRow = row + 0.5; // Middle of single row
+            blockCenterCol = col + 1; // Between col and col+1
+        } else {
+            // Full 2x2 block
+            blockCenterRow = row + 1; // Between row and row+1
+            blockCenterCol = col + 1; // Between col and col+1
+        }
+        
+        // Determine which direction the cursor is relative to block center
+        const cursorQuadrant = {
+            row: cursorCellRow < blockCenterRow ? 0 : 1,
+            col: cursorCellCol < blockCenterCol ? 0 : 1
+        };
+        
+        const neighbors = getNeighboringPositions(row, col, cursorQuadrant, blockType);
+        for (const neighbor of neighbors) {
+            if (isPositionValid(neighbor.row, neighbor.col, blockType, draggedBlockNumber, isMovingExistingBlock)) {
+                finalRow = neighbor.row;
+                finalCol = neighbor.col;
+                positionFound = true;
+                break;
             }
         }
     }
+    
+    // If no valid position found, return to original or supply
+    if (!positionFound) {
+        if (draggedBlockOriginalPosition) {
+            draggedBlock.style.left = draggedBlockOriginalPosition.left;
+            draggedBlock.style.top = draggedBlockOriginalPosition.top;
+            // Re-add to grid state since we removed it earlier
+            const oldRow = parseInt(draggedBlock.dataset.gridRow);
+            const oldCol = parseInt(draggedBlock.dataset.gridCol);
+            const oldBlockType = draggedBlock.dataset.blockType || 'full';
+            const oldCells = getCellsForBlock(oldRow, oldCol, oldBlockType);
+            
+            const blockNum = parseInt(draggedBlock.dataset.number);
+            const bgColor = window.getComputedStyle(draggedBlock).backgroundColor;
+            for (const cellKey of oldCells) {
+                gridState[cellKey] = {
+                    blockNumber: blockNum,
+                    backgroundColor: bgColor
+                };
+            }
+        } else {
+            returnBlockToSupply();
+        }
+        updateBlockStats();
+        return;
+    }
+    
+    // Update cells for final position
+    cells = getCellsForBlock(finalRow, finalCol, blockType);
     
     // Place block
     const gridElement = document.getElementById('design-grid');
@@ -308,10 +374,10 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
     }
     
     draggedBlock.classList.add('on-grid');
-    draggedBlock.style.left = `${col * CELL_SIZE}px`;
-    draggedBlock.style.top = `${row * CELL_SIZE}px`;
-    draggedBlock.dataset.gridRow = row;
-    draggedBlock.dataset.gridCol = col;
+    draggedBlock.style.left = `${finalCol * CELL_SIZE}px`;
+    draggedBlock.style.top = `${finalRow * CELL_SIZE}px`;
+    draggedBlock.dataset.gridRow = finalRow;
+    draggedBlock.dataset.gridCol = finalCol;
     
     // Update grid state
     const blockNumber = parseInt(draggedBlock.dataset.number);
@@ -326,9 +392,9 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
     
     // If it's a blank block (0), keep it in supply
     if (blockNumber === 0) {
-        const supplyArea = document.getElementById('supply-area');
+        const blocksContainer = getSupplyBlocksContainer();
         const currentBlockType = draggedBlock.dataset.blockType || 'full';
-        const hasBlankInSupply = Array.from(supplyArea.children).some(
+        const hasBlankInSupply = Array.from(blocksContainer.children).some(
             child => child.dataset.number === '0' && 
                      child.dataset.blockType === currentBlockType &&
                      !child.classList.contains('on-grid')
@@ -344,7 +410,7 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
             }
             
             // Insert blank block in correct sorted position
-            const allBlocks = Array.from(supplyArea.children);
+            const allBlocks = Array.from(blocksContainer.children);
             const blankBlocks = allBlocks.filter(b => b.dataset.number === '0');
             const order = { 'full': 0, 'half-vertical': 1, 'half-horizontal': 2 };
             
@@ -359,16 +425,17 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
             }
             
             if (insertBefore) {
-                supplyArea.insertBefore(newBlankBlock, insertBefore);
+                blocksContainer.insertBefore(newBlankBlock, insertBefore);
             } else {
-                supplyArea.appendChild(newBlankBlock);
+                blocksContainer.appendChild(newBlankBlock);
             }
         }
     } else {
         // For numbered blocks, create a placeholder in supply if coming from supply
-        if (draggedBlockOriginalParent && draggedBlockOriginalParent.id === 'supply-area') {
+        const blocksContainer = getSupplyBlocksContainer();
+        if (draggedBlockOriginalParent && (draggedBlockOriginalParent.id === 'supply-area' || draggedBlockOriginalParent === blocksContainer)) {
             const placeholder = createPlaceholder(blockNumber);
-            draggedBlockOriginalParent.appendChild(placeholder);
+            blocksContainer.appendChild(placeholder);
             sortSupplyArea();
         }
     }
@@ -406,26 +473,26 @@ function returnBlockToSupply() {
     delete draggedBlock.dataset.gridRow;
     delete draggedBlock.dataset.gridCol;
     
-    const supplyArea = document.getElementById('supply-area');
+    const blocksContainer = getSupplyBlocksContainer();
     
     // Only add back if it's not already in supply (numbered blocks only)
     if (blockNumber !== 0) {
         // Find and replace placeholder if it exists
-        const placeholder = Array.from(supplyArea.children).find(
+        const placeholder = Array.from(blocksContainer.children).find(
             child => child.classList.contains('placeholder') && 
                      child.dataset.number === draggedBlock.dataset.number
         );
         
         if (placeholder) {
-            supplyArea.replaceChild(draggedBlock, placeholder);
+            blocksContainer.replaceChild(draggedBlock, placeholder);
             sortSupplyArea();
         } else {
-            const existingInSupply = Array.from(supplyArea.children).find(
+            const existingInSupply = Array.from(blocksContainer.children).find(
                 child => child.dataset.number === draggedBlock.dataset.number
             );
             
             if (!existingInSupply) {
-                supplyArea.appendChild(draggedBlock);
+                blocksContainer.appendChild(draggedBlock);
                 sortSupplyArea();
             }
         }
@@ -463,10 +530,161 @@ function removeBlockFromGridState(row, col, blockType = 'full') {
     }
 }
 
+// Get cells occupied by a block at a given position
+function getCellsForBlock(row, col, blockType) {
+    let cells = [];
+    
+    if (blockType === 'half-vertical') {
+        cells = [
+            `${row},${col}`,
+            `${row + 1},${col}`
+        ];
+    } else if (blockType === 'half-horizontal') {
+        cells = [
+            `${row},${col}`,
+            `${row},${col + 1}`
+        ];
+    } else {
+        cells = [
+            `${row},${col}`,
+            `${row},${col + 1}`,
+            `${row + 1},${col}`,
+            `${row + 1},${col + 1}`
+        ];
+    }
+    
+    return cells;
+}
+
+// Check if a position is within grid bounds
+function isPositionInBounds(row, col, blockType) {
+    if (blockType === 'half-vertical') {
+        return col >= 0 && col < GRID_SIZE && row >= 0 && row + 1 < GRID_SIZE;
+    } else if (blockType === 'half-horizontal') {
+        return col >= 0 && col + 1 < GRID_SIZE && row >= 0 && row < GRID_SIZE;
+    } else {
+        return col >= 0 && col + 1 < GRID_SIZE && row >= 0 && row + 1 < GRID_SIZE;
+    }
+}
+
+// Check if a position is valid for placing a block
+function isPositionValid(row, col, blockType, draggedBlockNumber, isMovingExistingBlock) {
+    // Check bounds
+    if (!isPositionInBounds(row, col, blockType)) {
+        return false;
+    }
+    
+    // Check for collisions with other blocks
+    const cells = getCellsForBlock(row, col, blockType);
+    for (const cellKey of cells) {
+        if (gridState[cellKey]) {
+            // Allow if this is the same block being moved (not blank blocks)
+            const isSameBlock = isMovingExistingBlock && 
+                               gridState[cellKey].blockNumber === draggedBlockNumber &&
+                               draggedBlockNumber !== 0;
+            
+            if (!isSameBlock) {
+                return false;
+            }
+        }
+    }
+    
+    return true;
+}
+
+// Get neighboring positions in clockwise order starting from the clicked quadrant
+// For a 2x2 block in a 4x4 area, there are up to 8 neighboring positions
+// For half-blocks, positions are adjusted based on orientation
+function getNeighboringPositions(centerRow, centerCol, clickedQuadrant, blockType) {
+    let allOffsets;
+    let startIndex = 0;
+    
+    if (blockType === 'half-vertical') {
+        // 1x2 block in a 3x4 area - 8 neighbors
+        // In a 3-column x 4-row area, a 1x2 block can occupy 3x3=9 positions
+        // Center is surrounded by 8 neighbors at offsets ±1 col, ±1 row
+        allOffsets = [
+            { row: -1, col: 0 },   // Top
+            { row: -1, col: 1 },   // Top right
+            { row: 0, col: 1 },    // Right
+            { row: 1, col: 1 },    // Bottom right
+            { row: 1, col: 0 },    // Bottom
+            { row: 1, col: -1 },   // Bottom left
+            { row: 0, col: -1 },   // Left
+            { row: -1, col: -1 }   // Top left
+        ];
+        
+        // For half-vertical, clickedQuadrant.col is always 0
+        if (clickedQuadrant.row === 0) {
+            startIndex = 7; // Top half → start from top-left
+        } else {
+            startIndex = 5; // Bottom half → start from bottom-left
+        }
+    } else if (blockType === 'half-horizontal') {
+        // 2x1 block in a 4x3 area - 8 neighbors
+        // In a 4-column x 3-row area, a 2x1 block can occupy 3x3=9 positions
+        // Center is surrounded by 8 neighbors at offsets ±1 col, ±1 row
+        allOffsets = [
+            { row: -1, col: 0 },   // Top
+            { row: -1, col: 1 },   // Top right
+            { row: 0, col: 1 },    // Right
+            { row: 1, col: 1 },    // Bottom right
+            { row: 1, col: 0 },    // Bottom
+            { row: 1, col: -1 },   // Bottom left
+            { row: 0, col: -1 },   // Left
+            { row: -1, col: -1 }   // Top left
+        ];
+        
+        // For half-horizontal, clickedQuadrant.row is always 0
+        if (clickedQuadrant.col === 0) {
+            startIndex = 7; // Left half → start from top-left
+        } else {
+            startIndex = 1; // Right half → start from top-right
+        }
+    } else {
+        // Full 2x2 block in a 4x4 area - 8 neighbors
+        // In a 4x4 grid, a 2x2 block can occupy 3x3=9 positions
+        // Center is surrounded by 8 neighbors at offsets ±1 col, ±1 row
+        allOffsets = [
+            { row: -1, col: 0 },   // Top
+            { row: -1, col: 1 },   // Top right
+            { row: 0, col: 1 },    // Right
+            { row: 1, col: 1 },    // Bottom right
+            { row: 1, col: 0 },    // Bottom
+            { row: 1, col: -1 },   // Bottom left
+            { row: 0, col: -1 },   // Left
+            { row: -1, col: -1 }   // Top left
+        ];
+        
+        // Determine starting index based on clicked quadrant
+        if (clickedQuadrant.row === 0 && clickedQuadrant.col === 0) {
+            startIndex = 7; // Top-left quadrant → start from top-left position
+        } else if (clickedQuadrant.row === 0 && clickedQuadrant.col === 1) {
+            startIndex = 1; // Top-right quadrant → start from top-right position
+        } else if (clickedQuadrant.row === 1 && clickedQuadrant.col === 1) {
+            startIndex = 3; // Bottom-right quadrant → start from bottom-right position
+        } else if (clickedQuadrant.row === 1 && clickedQuadrant.col === 0) {
+            startIndex = 5; // Bottom-left quadrant → start from bottom-left position
+        }
+    }
+    
+    // Rotate array to start from the appropriate position and continue clockwise
+    const orderedOffsets = [
+        ...allOffsets.slice(startIndex),
+        ...allOffsets.slice(0, startIndex)
+    ];
+    
+    // Convert offsets to absolute positions
+    return orderedOffsets.map(offset => ({
+        row: centerRow + offset.row,
+        col: centerCol + offset.col
+    }));
+}
+
 // Sort supply area blocks by number
 function sortSupplyArea() {
-    const supplyArea = document.getElementById('supply-area');
-    const blocks = Array.from(supplyArea.children);
+    const blocksContainer = getSupplyBlocksContainer();
+    const blocks = Array.from(blocksContainer.children).filter(child => child.classList.contains('block'));
     
     blocks.sort((a, b) => {
         const numA = parseInt(a.dataset.number);
@@ -487,7 +705,7 @@ function sortSupplyArea() {
     });
     
     // Re-append in sorted order
-    blocks.forEach(block => supplyArea.appendChild(block));
+    blocks.forEach(block => blocksContainer.appendChild(block));
 }
 
 // Setup event listeners for buttons
@@ -571,7 +789,7 @@ function loadScene() {
         
         // Recreate blocks from loaded data
         const gridElement = document.getElementById('design-grid');
-        const supplyArea = document.getElementById('supply-area');
+        const blocksContainer = getSupplyBlocksContainer();
         
         blocks.forEach(blockData => {
             const { row, col, number, blockType = 'full', color, bgColor, borderColor, textColor } = blockData;
@@ -602,7 +820,7 @@ function loadScene() {
                 }
             } else {
                 // Find existing block in supply area
-                block = Array.from(supplyArea.children).find(
+                block = Array.from(blocksContainer.children).find(
                     child => parseInt(child.dataset.number) === number && 
                              !child.classList.contains('placeholder')
                 );
@@ -656,7 +874,7 @@ function loadScene() {
             // If numbered block, create placeholder in supply
             if (number !== 0) {
                 const placeholder = createPlaceholder(number);
-                supplyArea.appendChild(placeholder);
+                blocksContainer.appendChild(placeholder);
                 sortSupplyArea();
             }
         });
@@ -673,7 +891,7 @@ function loadScene() {
 function clearGrid() {
     const gridElement = document.getElementById('design-grid');
     const blocksOnGrid = Array.from(gridElement.querySelectorAll('.block'));
-    const supplyArea = document.getElementById('supply-area');
+    const blocksContainer = getSupplyBlocksContainer();
     
     blocksOnGrid.forEach(block => {
         const blockNumber = parseInt(block.dataset.number);
@@ -689,7 +907,7 @@ function clearGrid() {
         // Return numbered blocks to supply
         if (blockNumber !== 0) {
             // Find and replace placeholder if it exists
-            const placeholder = Array.from(supplyArea.children).find(
+            const placeholder = Array.from(blocksContainer.children).find(
                 child => child.classList.contains('placeholder') && 
                          child.dataset.number === block.dataset.number
             );
@@ -700,7 +918,7 @@ function clearGrid() {
                 block.style.top = '';
                 delete block.dataset.gridRow;
                 delete block.dataset.gridCol;
-                supplyArea.replaceChild(block, placeholder);
+                blocksContainer.replaceChild(block, placeholder);
                 sortSupplyArea();
             }
         }
@@ -716,20 +934,6 @@ function clearGrid() {
         delete gridState[key];
     }
 }
-
-// Color options with their properties
-const COLOR_OPTIONS = [
-    { name: 'Red', bg: '#c92d22', border: '#5a0f0a', textColor: '#5a0f0a' },
-    { name: 'Green', bg: '#4caf50', border: '#14532d', textColor: '#14532d' },
-    { name: 'Blue', bg: '#2196f3', border: '#0d47a1', textColor: '#0d47a1' },
-    { name: 'White', bg: '#ffffff', border: '#999999', textColor: '#999999' },
-    { name: 'Gold', bg: '#ffc107', border: '#b8860b', textColor: '#b8860b' },
-    { name: 'Silver', bg: '#c0c0c0', border: '#808080', textColor: '#808080' },
-    { name: 'Brown', bg: '#795548', border: '#3e2723', textColor: '#3e2723' },
-    { name: 'Yellow', bg: '#ffee58', border: '#b8860b', textColor: '#b8860b' }
-];
-
-let currentContextBlock = null;
 
 // Helper function to convert RGB to hex
 function rgbToHex(rgb) {
@@ -869,10 +1073,19 @@ function updateBlockStats() {
     const gridElement = document.getElementById('design-grid');
     const blocksOnGrid = Array.from(gridElement.querySelectorAll('.block'));
     const statsElement = document.getElementById('block-stats');
+    const captionElement = document.getElementById('grid-caption');
     
     if (blocksOnGrid.length === 0) {
-        statsElement.innerHTML = '';
+        statsElement.innerHTML = '<span class="text-gray-500">Block stats will appear here as you build your scene</span>';
+        if (captionElement) {
+            captionElement.textContent = 'Drag a block to the design grid to get started';
+        }
         return;
+    }
+    
+    // Update caption for when blocks are on grid
+    if (captionElement) {
+        captionElement.textContent = 'Double-click a block to change its color';
     }
     
     // Count by color-type combination

@@ -5,30 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advent Blocks</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="styles-9a3e51.css">
+    <link rel="stylesheet" href="styles-2f8d91.css">
 </head>
 <body class="bg-gray-100 overflow-hidden">
     <div class="flex gap-4 h-screen p-4">
         <!-- Design Grid (1/2 width) -->
-        <div class="w-1/2 flex items-start justify-center">
+        <div class="w-1/2 flex flex-col items-center justify-start gap-2">
             <div id="design-grid" class="grid-container"></div>
+            <div id="grid-caption" class="text-sm text-gray-600">
+                Drag a block to the design grid to get started
+            </div>
         </div>
 
         <!-- Supply Area (1/2 width) -->
         <div class="w-1/2 flex flex-col gap-4">
-            <div id="supply-area" class="flex flex-wrap justify-center gap-2 p-4 bg-white rounded shadow">
-                <!-- Numbered blocks 1-24 -->
-                <!-- Blank block -->
+            <div id="supply-area" class="flex gap-2 p-4 bg-white rounded shadow relative">
+                <div class="flex flex-wrap justify-center gap-2 flex-1">
+                    <!-- Numbered blocks 1-24 -->
+                    <!-- Blank block -->
+                </div>
+                <div id="color-buttons" class="flex flex-col gap-2 pl-2 border-l border-gray-300 self-end">
+                    <!-- Color buttons will be added by JavaScript -->
+                </div>
             </div>
 
             <div class="flex gap-2">
-                <button id="capture-btn" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded">
+                <button id="capture-btn" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded" data-tooltip="Copy JSON data defining your scene to the clipboard">
                     Capture
                 </button>
-                <button id="load-btn" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded">
+                <button id="load-btn" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded" data-tooltip="Paste the JSON data defining your scene into the box below and click this button to load it">
                     Load
                 </button>
-                <button id="reset-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded">
+                <button id="reset-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded" data-tooltip="Clear the grid and reset for a new scene">
                     Reset
                 </button>
             </div>
@@ -42,6 +50,6 @@
         </div>
     </div>
 
-    <script src="app-9a3e51.js"></script>
+    <script src="app-2f8d91.js"></script>
 </body>
 </html>
