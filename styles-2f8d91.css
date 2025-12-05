@@ -144,6 +144,18 @@
     cursor: not-allowed;
     opacity: 0.6;
     pointer-events: none;
+    position: relative;
+}
+
+.block.placeholder::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 120%;
+    height: 3px;
+    background-color: #666666;
+    transform: translate(-50%, -50%) rotate(-45deg);
 }
 
 /* Context Menu */
@@ -199,7 +211,7 @@
 }
 
 /* Supply Area Grid Layout */
-#supply-area {
+#supply-area .flex-wrap {
     display: grid !important;
     grid-template-columns: repeat(6, 80px);
     grid-template-rows: repeat(5, auto);
@@ -210,17 +222,82 @@
 }
 
 /* Position blank blocks on row 5, centered */
-#supply-area .blank:nth-of-type(1) {
+#supply-area .flex-wrap .blank:nth-of-type(1) {
     grid-row: 5;
     grid-column: 2;
 }
 
-#supply-area .blank:nth-of-type(2) {
+#supply-area .flex-wrap .blank:nth-of-type(2) {
     grid-row: 5;
     grid-column: 3;
 }
 
-#supply-area .blank:nth-of-type(3) {
+#supply-area .flex-wrap .blank:nth-of-type(3) {
     grid-row: 5;
     grid-column: 4;
+}
+
+/* Styled Tooltips */
+[data-tooltip] {
+    position: relative;
+}
+
+[data-tooltip]::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 12px;
+    background-color: #1f2937;
+    color: white;
+    font-size: 13px;
+    line-height: 1.4;
+    border-radius: 6px;
+    white-space: nowrap;
+    min-width: 200px;
+    max-width: 400px;
+    white-space: normal;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 1000;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+[data-tooltip]::after {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1f2937;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 1000;
+}
+
+[data-tooltip]:hover::before,
+[data-tooltip]:hover::after {
+    opacity: 1;
+}
+
+/* Color buttons tooltips - position to the left */
+#color-buttons [data-tooltip]::before {
+    left: auto;
+    right: calc(100% + 8px);
+    bottom: 50%;
+    transform: translateY(50%);
+}
+
+#color-buttons [data-tooltip]::after {
+    left: auto;
+    right: calc(100% + 2px);
+    bottom: 50%;
+    transform: translateY(50%) rotate(-90deg);
+    border-top-color: transparent;
+    border-left-color: #1f2937;
 }

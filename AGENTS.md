@@ -1,36 +1,39 @@
-# Agent Guidelines for Blocks Project
+# Agent Guidelines for Advent Blocks
 
-## Project Structure
-- **index.html**: Main HTML with Tailwind CSS CDN, no build step required
-- **app-9a3e51.js**: Vanilla JavaScript for drag-and-drop logic, state management (note: hash suffix in filename)
-- **styles-9a3e51.css**: Custom CSS for grid borders, blocks, and layout specifics not covered by Tailwind (note: hash suffix in filename)
+## Project Files
+- **index.html**: Main HTML, Tailwind CDN, no build system
+- **app-2f8d91.js**: Vanilla JS drag-and-drop logic (hash suffix in filename - don't change without updating HTML)
+- **styles-2f8d91.css**: Custom CSS for grid borders, block sizing, tooltips (hash suffix in filename - don't change without updating HTML)
 
-## Build/Test Commands
-- **Run**: Open `index.html` in browser (no build system)
-- **Test**: Manual testing only - drag blocks, double-click for colors, test capture/load/reset, verify grid alignment
-- **Lint**: No automated linting configured
+## Build/Test
+- **Run**: Open `index.html` in browser directly (no build needed)
+- **Test**: Manual only - drag blocks, double-click colors, test capture/load/reset, color buttons, smart positioning
+- **Lint**: None configured
 
 ## Code Style
-- **Language**: Vanilla JavaScript ES6+, no frameworks, no TypeScript
-- **Imports**: None - all code in single file loaded via `<script>` tag
-- **Styling**: Tailwind CSS utilities via CDN; custom CSS only for grid borders and block sizing
-- **Naming**: camelCase (variables/functions), kebab-case (CSS classes), SCREAMING_SNAKE_CASE (constants)
-- **Types**: No type annotations - use JSDoc comments for complex functions if needed
-- **State Management**: Track grid state as object with `"row,col"` string keys containing `{blockNumber, backgroundColor}`
-- **Error Handling**: Wrap DOM operations and drag-and-drop handlers in try-catch blocks
-- **Formatting**: 4-space indentation, semicolons optional, prefer arrow functions and const/let
+- **Language**: Vanilla JS ES6+, no frameworks/TypeScript/imports
+- **Naming**: camelCase (JS), kebab-case (CSS), SCREAMING_SNAKE_CASE (constants)
+- **Formatting**: 4-space indent, semicolons optional, arrow functions, const/let
+- **Error Handling**: Wrap DOM ops and drag handlers in try-catch
+- **State**: Object with `"row,col"` keys → `{blockNumber, backgroundColor}`
+- **DOM Structure**: Supply area has `.flex-wrap` child for blocks, use `getSupplyBlocksContainer()` helper
 
-## Key Implementation Notes
-- Grid: 18x18 cells (40px each), blocks are 2x2 cells (80px total), half-blocks available (40x80 vertical, 80x40 horizontal)
-- Layout: 50/50 split between design grid (left) and supply area (right)
-- Grid cells identified by row/col (0-indexed), NOT absolute pixel positions
-- Grid borders: 1px solid gray for cells, 1px solid black for 2x2 groupings and outer edges
-- Numbered blocks (1-24): single instance only, disappear from supply when placed (placeholders remain)
-- Blank blocks (0): unlimited instances, stays in supply when placed (full, half-vertical, half-horizontal variants)
-- Drag behavior: clicked quadrant within block is tracked; on drop, that quadrant aligns with hovered grid cell
-- Blocks align to grid cells on drop; return to supply if dropped outside grid or if boundary check fails
-- Double-click blocks to open color menu; 8 color options (Red, Green, Blue, White, Gold, Silver, Brown, Yellow) in COLOR_OPTIONS
-- Colors: text and border color always match for each option; background is distinct
-- Block stats: displayed in supply area showing (color)-(type): (count) format, updated on place/move/remove/color change
-- Capture/Load: JSON format with `{row, col, number, blockType, color}` objects; color stored as name (not RGB)
-- No design validation - blocks can be placed anywhere on grid without contiguity requirements
+## Key Details
+- 18×18 grid (40px cells), blocks 2×2 (80px), half-blocks 1×2 or 2×1
+- Numbered 1-24: single instance, placeholder with diagonal slash on place | Blank (0): unlimited
+- Drag: cursor-based quadrant detection, smart positioning checks 8 neighbors (±1 offset) clockwise when blocked
+- Colors: 8 options in COLOR_OPTIONS at top of file, double-click block or use color buttons (right side of supply)
+- Color buttons: bottom-right of supply area, only affect blocks still in supply (not on grid)
+- Tooltips: Custom styled with `data-tooltip` attribute, left-aligned for color buttons
+- Placeholders: Gray blocks with diagonal slash (::after pseudo-element) when numbered blocks placed on grid
+- Captions: Dynamic - "Drag a block..." when empty, "Double-click..." when blocks on grid
+- Block stats: Auto-update on place/move/remove, show placeholder text when empty
+- Capture/Load: JSON `{row, col, number, blockType, color}` with color as name
+- Smart positioning: When drop blocked, checks 8 neighbors starting from cursor position direction, moves clockwise
+- Helper functions: `getSupplyBlocksContainer()`, `getCellsForBlock()`, `isPositionValid()`, `getNeighboringPositions()`
+
+## Important Notes
+- Always use `getSupplyBlocksContainer()` instead of direct `#supply-area` children access
+- Tooltips for buttons use `data-tooltip` not `title` attribute
+- Grid state tracks blocks by `"row,col"` string keys, remove old position before adding new
+- Smart drop only tries 8 immediate neighbors (within 4×4 area for full blocks), not farther positions
