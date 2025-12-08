@@ -409,6 +409,14 @@ function placeBlockOnGrid(cursorX, cursorY, gridRect) {
                 newBlankBlock.classList.add('half-horizontal');
             }
             
+            // Preserve the color from the dragged block
+            const draggedBgColor = window.getComputedStyle(draggedBlock).backgroundColor;
+            const draggedBorderColor = window.getComputedStyle(draggedBlock).borderColor;
+            const draggedTextColor = window.getComputedStyle(draggedBlock).color;
+            newBlankBlock.style.backgroundColor = draggedBgColor;
+            newBlankBlock.style.borderColor = draggedBorderColor;
+            newBlankBlock.style.color = draggedTextColor;
+            
             // Insert blank block in correct sorted position
             const allBlocks = Array.from(blocksContainer.children);
             const blankBlocks = allBlocks.filter(b => b.dataset.number === '0');
