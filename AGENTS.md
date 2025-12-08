@@ -2,8 +2,8 @@
 
 ## Project Files
 - **index.html**: Main HTML, Tailwind CDN, no build system
-- **app-7c4e92.js**: Vanilla JS drag-and-drop logic (hash suffix in filename - don't change without updating HTML)
-- **styles-7c4e92.css**: Custom CSS for grid borders, block sizing, tooltips, clips (hash suffix in filename - don't change without updating HTML)
+- **app-8d5f31.js**: Vanilla JS drag-and-drop logic (hash suffix in filename - don't change without updating HTML)
+- **styles-8d5f31.css**: Custom CSS for grid borders, block sizing, tooltips, clips (hash suffix in filename - don't change without updating HTML)
 
 ## Build/Test
 - **Run**: Open `index.html` in browser directly (no build needed)
